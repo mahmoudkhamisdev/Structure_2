@@ -29,6 +29,8 @@ interface ContentState {
     defaultContent?: string,
   ) => void;
   deleteNodeContent: (id: string) => void;
+  viewerTab: "viewer" | "flow";
+  setViewerTab: (tab: "viewer" | "flow") => void;
 }
 
 export const useContentStore = create<ContentState>()(
@@ -108,6 +110,9 @@ export const useContentStore = create<ContentState>()(
           }
           return { fileContents: updatedContents };
         }),
+
+      viewerTab: "viewer",
+      setViewerTab: (viewerTab) => set({ viewerTab }),
     }),
     {
       name: "formatly_app_storage",
