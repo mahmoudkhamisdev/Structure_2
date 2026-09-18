@@ -28,9 +28,9 @@ export function FileNameInput() {
     }
 
     // Ensure it keeps its original extension or defaults to .md if none provided
-    const finalName = trimmed.includes(".") ? trimmed : `${trimmed}.md`;
-    setLocalName(finalName);
-    setFileName(finalName);
+    // const finalName = trimmed.includes(".") ? trimmed : `${trimmed}.md`;
+    setLocalName(trimmed);
+    setFileName(trimmed);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 1500);
   };
