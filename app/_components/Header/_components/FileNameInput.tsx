@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useContentStore } from "@/store/useContentStore";
-import { Folder, ChevronRight, FileText, Check } from "lucide-react";
+import { Folder, ChevronRight, FileText, Check, Network } from "lucide-react";
 
 export function FileNameInput() {
   const { fileName, setFileName, filePath } = useContentStore();
@@ -52,7 +52,11 @@ export function FileNameInput() {
 
       {/* Editable File Name Input */}
       <div className="group relative flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1 text-foreground shadow-xs transition-all hover:border-border hover:bg-muted/60 focus-within:border-primary/60 focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/20">
-        <FileText className="size-3.5 text-primary shrink-0 transition-colors group-hover:text-primary" />
+        {fileName?.toLowerCase().endsWith(".flow") ? (
+          <Network className="size-3.5 text-emerald-500 shrink-0 transition-colors" />
+        ) : (
+          <FileText className="size-3.5 text-primary shrink-0 transition-colors group-hover:text-primary" />
+        )}
         
         <input
           type="text"

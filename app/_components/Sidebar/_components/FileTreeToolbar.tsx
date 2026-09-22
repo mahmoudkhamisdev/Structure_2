@@ -12,6 +12,7 @@ type FileTreeToolbarProps = {
   setFiles: React.Dispatch<React.SetStateAction<FileNode[]>>;
   setEditingNodeId: (id: string) => void;
   setEditingName: (name: string) => void;
+  onOpenCreateFile?: () => void;
 };
 
 export function FileTreeToolbar({
@@ -19,6 +20,7 @@ export function FileTreeToolbar({
   setFiles,
   setEditingNodeId,
   setEditingName,
+  onOpenCreateFile,
 }: FileTreeToolbarProps) {
   const { selectNode } = useContentStore();
 
@@ -71,7 +73,13 @@ export function FileTreeToolbar({
           variant="ghost"
           size="icon"
           className="h-6 w-6 text-sidebar-foreground"
-          onClick={addRootFile}
+          onClick={() => {
+            if (onOpenCreateFile) {
+              onOpenCreateFile();
+            } else {
+              addRootFile();
+            }
+          }}
           title="Add File"
         >
           <FilePlus className="size-4 text-muted-foreground" />

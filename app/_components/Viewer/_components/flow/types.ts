@@ -1,5 +1,33 @@
 import type { Node, Edge } from "@xyflow/react";
 
+export type FlowchartNodeType =
+  | "terminator"
+  | "process"
+  | "decision"
+  | "delay"
+  | "data"
+  | "document"
+  | "multidocument"
+  | "subroutine"
+  | "preparation"
+  | "display"
+  | "manualInput"
+  | "manualLoop"
+  | "loopLimit"
+  | "storedData"
+  | "connector"
+  | "offpageDown"
+  | "offpageUp"
+  | "offpageRight"
+  | "offpageLeft"
+  | "or"
+  | "summingJunction"
+  | "collate"
+  | "sort"
+  | "merge"
+  | "database"
+  | "internalStorage";
+
 export type ChenNodeType =
   | "entity"
   | "weakEntity"
@@ -8,7 +36,8 @@ export type ChenNodeType =
   | "attribute"
   | "keyAttribute"
   | "multivaluedAttribute"
-  | "text";
+  | "text"
+  | FlowchartNodeType;
 
 export interface ChenNodeData extends Record<string, unknown> {
   label: string;
@@ -19,8 +48,8 @@ export interface ChenNodeData extends Record<string, unknown> {
 export type ChenNode = Node<ChenNodeData, ChenNodeType>;
 
 export interface ChenEdgeData extends Record<string, unknown> {
-  label?: string; // e.g. "1", "N", "M", "(0,1)", "(1,N)"
-  isTotal?: boolean; // Total participation (double line)
+  label?: string; // e.g. "1", "N", "M", "(0,1)", "(1,N)", "Yes", "No"
+  isTotal?: boolean; // Total participation / thick edge
 }
 
 export type ChenEdge = Edge<ChenEdgeData>;

@@ -77,16 +77,18 @@ export const useContentStore = create<ContentState>()(
       selectNode: (id, name, path, defaultContent) =>
         set((state) => {
           const existingContent = state.fileContents[id];
+          const isFlow = name.toLowerCase().endsWith(".flow");
           const newContent =
             existingContent !== undefined
               ? existingContent
-              : (defaultContent ?? `# ${name}\n\nWrite your content here...`);
+              : (defaultContent ?? (isFlow ? `# ${name}\n\nFlow diagram document.` : `# ${name}\n\nWrite your content here...`));
 
           return {
             activeNodeId: id,
             fileName: name,
             filePath: path,
             content: newContent,
+            viewerTab: isFlow ? "flow" : state.viewerTab === "flow" ? "viewer" : state.viewerTab,
             fileContents: {
               ...state.fileContents,
               [id]: newContent,

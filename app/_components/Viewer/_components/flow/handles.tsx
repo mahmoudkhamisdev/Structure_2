@@ -2,17 +2,32 @@
 
 import React from "react";
 import { Handle, Position } from "@xyflow/react";
+import { NodeQuickConnectArrow } from "./NodeQuickConnectArrow";
 
 interface ChenNodeHandlesProps {
   isConnectable?: boolean;
+  nodeId?: string;
+  showQuickConnect?: boolean;
 }
 
 const handleCommonClasses =
   "!w-2 !h-2 !rounded-full !bg-muted-foreground/60 hover:!bg-primary hover:!scale-125 !border !border-background transition-colors duration-100";
 
-export function ChenNodeHandles({ isConnectable = true }: ChenNodeHandlesProps) {
+export function ChenNodeHandles({
+  isConnectable = true,
+  nodeId,
+  showQuickConnect = true,
+}: ChenNodeHandlesProps) {
   return (
     <>
+      {showQuickConnect && isConnectable && (
+        <>
+          <NodeQuickConnectArrow nodeId={nodeId} direction="top" />
+          <NodeQuickConnectArrow nodeId={nodeId} direction="right" />
+          <NodeQuickConnectArrow nodeId={nodeId} direction="bottom" />
+          <NodeQuickConnectArrow nodeId={nodeId} direction="left" />
+        </>
+      )}
       {/* Top Handles */}
       <Handle
         type="target"

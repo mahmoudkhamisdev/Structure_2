@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FileText, Folder } from "lucide-react";
+import { FileText, Folder, Network } from "lucide-react";
 import { FileNode } from "../types";
 import {
   DropdownMenu,
@@ -64,7 +64,13 @@ export function FolderDropdown({
               className="cursor-pointer text-xs"
               onClick={() => onSelectFile(child.id, child.name, folder.name)}
             >
-              <FileText className="mr-2 size-4 text-muted-foreground" />
+              {child.name.toLowerCase().endsWith(".flow") ? (
+                <Network
+                  className="mr-2 size-4 text-emerald-500! dark:text-emerald-400! shrink-0"
+                />
+              ) : (
+                <FileText className="mr-2 size-4 text-muted-foreground shrink-0" />
+              )}
               <span className="truncate">{child.name}</span>
             </DropdownMenuItem>
           ))

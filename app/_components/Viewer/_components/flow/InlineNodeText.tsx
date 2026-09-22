@@ -35,8 +35,8 @@ export function InlineNodeText({
 
   const handleFinish = () => {
     setIsEditing(false);
-    const trimmed = value.trim() || label || "Untitled";
-    setValue(trimmed);
+    const finalValue = value.trim() ? value : (label || "Untitled");
+    setValue(finalValue);
     setNodes((nodes) =>
       nodes.map((node) => {
         if (node.id === id) {
@@ -44,7 +44,7 @@ export function InlineNodeText({
             ...node,
             data: {
               ...node.data,
-              label: trimmed,
+              label: finalValue,
             },
           };
         }
@@ -54,6 +54,7 @@ export function InlineNodeText({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === "Enter") {
       e.preventDefault();
       handleFinish();
@@ -65,20 +66,40 @@ export function InlineNodeText({
 
   if (isEditing) {
     return (
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={handleFinish}
-        onKeyDown={handleKeyDown}
-        style={{ width: `${Math.max(value.length, 1)}ch` }}
-        className={cn(
-          "bg-transparent border-0 outline-none ring-0 shadow-none p-0 m-0 text-center font-inherit text-inherit cursor-text",
-          underlined && "underline underline-offset-4 decoration-1 decoration-foreground",
-          className
-        )}
-      />
+      <div
+        className="nodrag nopan relative inline-flex items-center justify-center min-w-[2rem]"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Mirror element for exact pixel-perfect content sizing */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "invisible whitespace-pre font-inherit text-inherit text-center px-1",
+            underlined && "underline underline-offset-4 decoration-1 decoration-foreground",
+            className
+          )}
+        >
+          {value || " "}
+        </span>
+
+        {/* Input over mirror so node expands dynamically with every character */}
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={handleFinish}
+          onKeyDown={handleKeyDown}
+          onKeyDownCapture={(e) => e.stopPropagation()}
+          onKeyUp={(e) => e.stopPropagation()}
+          className={cn(
+            "nodrag nopan absolute inset-0 w-full h-full bg-transparent border-0 outline-none ring-0 shadow-none p-0 m-0 text-center font-inherit text-inherit cursor-text",
+            underlined && "underline underline-offset-4 decoration-1 decoration-foreground",
+            className
+          )}
+        />
+      </div>
     );
   }
 
@@ -90,7 +111,7 @@ export function InlineNodeText({
       }}
       title="Double-click to edit name"
       className={cn(
-        "cursor-text select-none whitespace-nowrap",
+        "cursor-text select-none whitespace-pre inline-block px-1",
         underlined && "underline underline-offset-4 decoration-1 decoration-foreground",
         className
       )}
@@ -99,3 +120,4 @@ export function InlineNodeText({
     </span>
   );
 }
+

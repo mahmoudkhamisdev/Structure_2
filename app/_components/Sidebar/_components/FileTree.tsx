@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Folder, FileText, ChevronRight, FilePlus, Check } from "lucide-react";
+import { Folder, FileText, ChevronRight, FilePlus, Check, Network } from "lucide-react";
 import { FileNode } from "../types";
 import { useContentStore } from "@/store/useContentStore";
 import {
@@ -40,6 +40,9 @@ type FileTreeProps = {
   setEditingNodeId: (id: string | null) => void;
   editingName: string;
   setEditingName: (name: string) => void;
+  openFolders?: Set<string>;
+  setOpenFolders?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  onOpenCreateFile?: (folder: { id: string; name: string }) => void;
 };
 
 export function FileTree({
@@ -49,6 +52,9 @@ export function FileTree({
   setEditingNodeId,
   editingName,
   setEditingName,
+  openFolders,
+  setOpenFolders,
+  onOpenCreateFile,
 }: FileTreeProps) {
   const { state: sidebarState } = useSidebar();
   const isCollapsed = sidebarState === "collapsed";
@@ -62,10 +68,11 @@ export function FileTree({
 
   const [activeDropdownFolder, setActiveDropdownFolder] = React.useState<string | null>(null);
 
-  // Initialize openFolders with all folders by default
-  const [openFolders, setOpenFolders] = React.useState<Set<string>>(
-    new Set(files.filter((f) => f.type === "folder").map((f) => f.id)),
+  const [internalOpenFolders, setInternalOpenFolders] = React.useState<Set<string>>(
+    () => new Set(files.filter((f) => f.type === "folder").map((f) => f.id)),
   );
+  const activeOpenFolders = openFolders ?? internalOpenFolders;
+  const updateOpenFolders = setOpenFolders ?? setInternalOpenFolders;
 
   const updateNodeName = React.useCallback(
     (nodes: FileNode[], id: string, newName: string): FileNode[] => {
@@ -131,7 +138,7 @@ export function FileTree({
 
     setEditingNodeId(newId);
     setEditingName(newFileName);
-    setOpenFolders((prev) => new Set(prev).add(folderId));
+    updateOpenFolders((prev) => new Set(prev).add(folderId));
 
     // Connect content & make active
     selectNode(
@@ -182,9 +189,9 @@ export function FileTree({
         item.type === "folder" ? (
           <Collapsible
             key={item.id}
-            open={openFolders.has(item.id)}
+            open={activeOpenFolders.has(item.id)}
             onOpenChange={(open) => {
-              setOpenFolders((prev) => {
+              updateOpenFolders((prev) => {
                 const next = new Set(prev);
                 if (open) next.add(item.id);
                 else next.delete(item.id);
@@ -234,7 +241,7 @@ export function FileTree({
                       >
                         <ChevronRight
                           className={`transition-transform duration-200 group-data-[collapsible=icon]:hidden ${
-                            openFolders.has(item.id) ? "rotate-90" : ""
+                            activeOpenFolders.has(item.id) ? "rotate-90" : ""
                           }`}
                         />
                         <Folder />
@@ -280,7 +287,11 @@ export function FileTree({
                   onClick={(e: React.MouseEvent) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    addFolderFile(item.id);
+                    if (onOpenCreateFile) {
+                      onOpenCreateFile({ id: item.id, name: item.name });
+                    } else {
+                      addFolderFile(item.id);
+                    }
                   }}
                 >
                   <FilePlus />
@@ -308,7 +319,13 @@ export function FileTree({
                                   setEditingName(child.name);
                                 }}
                               >
-                                <FileText />
+                                {child.name.toLowerCase().endsWith(".flow") ? (
+                                  <Network
+                                    className="text-emerald-500! dark:text-emerald-400! shrink-0"
+                                  />
+                                ) : (
+                                  <FileText className="shrink-0" />
+                                )}
                                 {editingNodeId === child.id ? (
                                   <InputGroup className="h-6">
                                     <InputGroupInput
@@ -369,6 +386,18 @@ export function FileTree({
               <ContextMenuContent>
                 <ContextMenuItem
                   onClick={() => {
+                    if (onOpenCreateFile) {
+                      onOpenCreateFile({ id: item.id, name: item.name });
+                    } else {
+                      addFolderFile(item.id);
+                    }
+                  }}
+                >
+                  <FilePlus className="mr-2 size-4" />
+                  New File...
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() => {
                     setEditingNodeId(item.id);
                     setEditingName(item.name);
                   }}
@@ -401,7 +430,14 @@ export function FileTree({
                   setEditingName(item.name);
                 }}
               >
-                <FileText />
+                {item.name.toLowerCase().endsWith(".flow") ? (
+                  <Network
+                    className="!text-emerald-500 dark:!text-emerald-400 shrink-0"
+                    style={{ color: "#10b981" }}
+                  />
+                ) : (
+                  <FileText className="shrink-0" />
+                )}
                 {editingNodeId === item.id ? (
                   <InputGroup className="h-6">
                     <InputGroupInput
