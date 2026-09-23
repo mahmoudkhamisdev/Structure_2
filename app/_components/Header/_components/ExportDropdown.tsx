@@ -18,12 +18,14 @@ import {
   exportMarkdownToHtml,
   copyMarkdownHtml,
 } from "@/lib/export-document";
+import { exportFlowDiagram } from "@/app/_components/flow/exportFlow";
 import { toast } from "sonner";
 import {
   Download,
   FileText,
   FileCode,
   FileEdit,
+  Image as ImageIcon,
   Copy,
   Check,
   ChevronDown,
@@ -31,17 +33,49 @@ import {
 } from "lucide-react";
 
 export function ExportDropdown() {
-  const { content } = useContentStore();
+  const { content, fileName, viewerTab } = useContentStore();
   const [exportingType, setExportingType] = useState<string | null>(null);
   const [copiedHtml, setCopiedHtml] = useState<boolean>(false);
+
+  const isFlow = viewerTab === "flow" || fileName?.toLowerCase().endsWith(".flow");
+
+  const handleExportDiagram = async (format: "png" | "svg" | "pdf") => {
+    if (exportingType) return;
+    setExportingType(format);
+
+    const labels = {
+      png: "PNG image",
+      svg: "SVG vector",
+      pdf: "PDF document",
+    };
+
+    const exportPromise = exportFlowDiagram(format, fileName).then((res) => {
+      if (!res) throw new Error(`Failed to generate ${labels[format]}`);
+      return res;
+    });
+
+    toast.promise(exportPromise, {
+      loading: `Generating ${labels[format]}...`,
+      success: `${labels[format]} downloaded successfully!`,
+      error: (err) => err?.message || `Failed to generate ${labels[format]}`,
+    });
+
+    try {
+      await exportPromise;
+    } catch (err) {
+      console.error("Diagram export error:", err);
+    } finally {
+      setExportingType(null);
+    }
+  };
 
   const handleExportPdf = async () => {
     if (exportingType) return;
     setExportingType("pdf");
 
     const exportPromise = exportMarkdownToPdf(content).then((res) => {
-      if (!res.success) {
-        throw new Error(res.error || "Failed to generate PDF document");
+      if (!res) {
+        throw new Error("Failed to generate PDF document");
       }
       return res;
     });
@@ -141,14 +175,16 @@ export function ExportDropdown() {
             size="sm"
             disabled={isBusy}
             className="h-8 w-8 sm:w-auto p-0 sm:px-2.5 gap-1.5 text-xs font-medium cursor-pointer transition-colors hover:bg-accent"
-            aria-label="Export Document Menu"
+            aria-label={isFlow ? "Export Diagram Menu" : "Export Document Menu"}
           >
             {isBusy ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
               <Download className="size-3.5 text-primary" />
             )}
-            <span className="hidden sm:inline">Export</span>
+            <span className="hidden sm:inline">
+              {isFlow ? "Export Diagram" : "Export Document"}
+            </span>
             <ChevronDown className="size-3 opacity-60 ml-0.5 hidden sm:inline" />
           </Button>
         }
@@ -160,88 +196,152 @@ export function ExportDropdown() {
         sideOffset={6}
         className="w-52 rounded-xl p-1.5 shadow-lg"
       >
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-            Export Document
-          </DropdownMenuLabel>
+        {isFlow ? (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+              Export Diagram
+            </DropdownMenuLabel>
 
-          {/* Export as PDF */}
-          <DropdownMenuItem
-            onClick={handleExportPdf}
-            disabled={isBusy}
-            className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
-          >
-            <div className="flex items-center gap-2">
-              <FileText className="size-4 text-red-500 shrink-0" />
-              <div className="flex flex-col text-left">
-                <span className="font-medium text-foreground">PDF Document</span>
-                <span className="text-[10px] text-muted-foreground">Vector printable file (.pdf)</span>
+            {/* Export as PNG */}
+            <DropdownMenuItem
+              onClick={() => handleExportDiagram("png")}
+              disabled={isBusy}
+              className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
+            >
+              <div className="flex items-center gap-2">
+                <ImageIcon className="size-4 text-emerald-500 shrink-0" />
+                <div className="flex flex-col text-left">
+                  <span className="font-medium text-foreground">PNG Image</span>
+                  <span className="text-[10px] text-muted-foreground">High resolution image (.png)</span>
+                </div>
               </div>
-            </div>
-            {exportingType === "pdf" && (
-              <Loader2 className="size-3 animate-spin text-muted-foreground" />
-            )}
-          </DropdownMenuItem>
+              {exportingType === "png" && (
+                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
 
-          {/* Export as Word */}
-          <DropdownMenuItem
-            onClick={handleExportWord}
-            disabled={isBusy}
-            className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
-          >
-            <div className="flex items-center gap-2">
-              <FileEdit className="size-4 text-blue-500 shrink-0" />
-              <div className="flex flex-col text-left">
-                <span className="font-medium text-foreground">Word Document</span>
-                <span className="text-[10px] text-muted-foreground">Editable Microsoft Word (.doc)</span>
+            {/* Export as SVG */}
+            <DropdownMenuItem
+              onClick={() => handleExportDiagram("svg")}
+              disabled={isBusy}
+              className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
+            >
+              <div className="flex items-center gap-2">
+                <FileCode className="size-4 text-amber-500 shrink-0" />
+                <div className="flex flex-col text-left">
+                  <span className="font-medium text-foreground">SVG Vector</span>
+                  <span className="text-[10px] text-muted-foreground">Scalable vector graphic (.svg)</span>
+                </div>
               </div>
-            </div>
-            {exportingType === "word" && (
-              <Loader2 className="size-3 animate-spin text-muted-foreground" />
-            )}
-          </DropdownMenuItem>
+              {exportingType === "svg" && (
+                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
 
-          {/* Export as HTML Webpage */}
-          <DropdownMenuItem
-            onClick={handleExportHtml}
-            disabled={isBusy}
-            className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
-          >
-            <div className="flex items-center gap-2">
-              <FileCode className="size-4 text-amber-500 shrink-0" />
-              <div className="flex flex-col text-left">
-                <span className="font-medium text-foreground">HTML Webpage</span>
-                <span className="text-[10px] text-muted-foreground">Standalone webpage (.html)</span>
+            {/* Export as PDF */}
+            <DropdownMenuItem
+              onClick={() => handleExportDiagram("pdf")}
+              disabled={isBusy}
+              className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
+            >
+              <div className="flex items-center gap-2">
+                <FileText className="size-4 text-red-500 shrink-0" />
+                <div className="flex flex-col text-left">
+                  <span className="font-medium text-foreground">PDF Document</span>
+                  <span className="text-[10px] text-muted-foreground">Printable document (.pdf)</span>
+                </div>
               </div>
-            </div>
-            {exportingType === "html" && (
-              <Loader2 className="size-3 animate-spin text-muted-foreground" />
-            )}
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
+              {exportingType === "pdf" && (
+                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        ) : (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                Export Document
+              </DropdownMenuLabel>
 
-        <DropdownMenuSeparator className="my-1" />
+              {/* Export as PDF */}
+              <DropdownMenuItem
+                onClick={handleExportPdf}
+                disabled={isBusy}
+                className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="size-4 text-red-500 shrink-0" />
+                  <div className="flex flex-col text-left">
+                    <span className="font-medium text-foreground">PDF Document</span>
+                    <span className="text-[10px] text-muted-foreground">Vector printable file (.pdf)</span>
+                  </div>
+                </div>
+                {exportingType === "pdf" && (
+                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                )}
+              </DropdownMenuItem>
 
-        {/* Copy HTML Code */}
-        <DropdownMenuItem
-          onClick={handleCopyHtml}
-          className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
-        >
-          <div className="flex items-center gap-2">
-            {copiedHtml ? (
-              <Check className="size-4 text-emerald-500 shrink-0" />
-            ) : (
-              <Copy className="size-4 text-muted-foreground shrink-0" />
-            )}
-            <div className="flex flex-col text-left">
-              <span className="font-medium text-foreground">
-                {copiedHtml ? "Copied to Clipboard!" : "Copy HTML Code"}
-              </span>
-              <span className="text-[10px] text-muted-foreground">Raw formatted HTML markup</span>
-            </div>
-          </div>
-          {copiedHtml && <span className="text-[10px] font-semibold text-emerald-500">Done</span>}
-        </DropdownMenuItem>
+              {/* Export as Word */}
+              <DropdownMenuItem
+                onClick={handleExportWord}
+                disabled={isBusy}
+                className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
+              >
+                <div className="flex items-center gap-2">
+                  <FileEdit className="size-4 text-blue-500 shrink-0" />
+                  <div className="flex flex-col text-left">
+                    <span className="font-medium text-foreground">Word Document</span>
+                    <span className="text-[10px] text-muted-foreground">Editable Microsoft Word (.doc)</span>
+                  </div>
+                </div>
+                {exportingType === "word" && (
+                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                )}
+              </DropdownMenuItem>
+
+              {/* Export as HTML Webpage */}
+              <DropdownMenuItem
+                onClick={handleExportHtml}
+                disabled={isBusy}
+                className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
+              >
+                <div className="flex items-center gap-2">
+                  <FileCode className="size-4 text-amber-500 shrink-0" />
+                  <div className="flex flex-col text-left">
+                    <span className="font-medium text-foreground">HTML Webpage</span>
+                    <span className="text-[10px] text-muted-foreground">Standalone webpage (.html)</span>
+                  </div>
+                </div>
+                {exportingType === "html" && (
+                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+
+            <DropdownMenuSeparator className="my-1" />
+
+            {/* Copy HTML Code */}
+            <DropdownMenuItem
+              onClick={handleCopyHtml}
+              className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer text-xs rounded-lg hover:bg-accent focus:bg-accent"
+            >
+              <div className="flex items-center gap-2">
+                {copiedHtml ? (
+                  <Check className="size-4 text-emerald-500 shrink-0" />
+                ) : (
+                  <Copy className="size-4 text-muted-foreground shrink-0" />
+                )}
+                <div className="flex flex-col text-left">
+                  <span className="font-medium text-foreground">
+                    {copiedHtml ? "Copied to Clipboard!" : "Copy HTML Code"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">Raw formatted HTML markup</span>
+                </div>
+              </div>
+              {copiedHtml && <span className="text-[10px] font-semibold text-emerald-500">Done</span>}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

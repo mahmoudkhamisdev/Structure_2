@@ -11,6 +11,8 @@ import {
 import type { ChenEdge } from "../types";
 import { cn } from "cn";
 
+import { useFlowStore } from "@/store/useFlowStore";
+
 export function ChenEdgeComponent({
   id,
   sourceX,
@@ -24,7 +26,8 @@ export function ChenEdgeComponent({
   data,
   selected,
 }: EdgeProps<ChenEdge>) {
-  const { setEdges } = useReactFlow();
+  const setEdges = useFlowStore((s) => s.setEdges);
+  const syncToMarkdown = useFlowStore((s) => s.syncToMarkdown);
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -44,8 +47,8 @@ export function ChenEdgeComponent({
     else if (current === "M") next = "";
     else next = "1";
 
-    setEdges((edges) =>
-      edges.map((edge) => {
+    setEdges((edges) => {
+      const nextEdges = edges.map((edge) => {
         if (edge.id === id) {
           return {
             ...edge,
@@ -56,8 +59,10 @@ export function ChenEdgeComponent({
           };
         }
         return edge;
-      })
-    );
+      });
+      syncToMarkdown(undefined, nextEdges);
+      return nextEdges;
+    });
   };
 
   const isTotal = data?.isTotal;

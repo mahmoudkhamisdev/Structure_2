@@ -7,6 +7,8 @@ import { ChenNodeHandles } from "../handles";
 import { InlineNodeText } from "../InlineNodeText";
 import { NodeContextMenu } from "../NodeContextMenu";
 import { ChenNodeResizer } from "../ChenNodeResizer";
+import { useTheme } from "next-themes";
+import { getNodeColors } from "../nodeColors";
 import { cn } from "cn";
 
 export const WeakEntityNode = memo(function WeakEntityNode({
@@ -15,11 +17,22 @@ export const WeakEntityNode = memo(function WeakEntityNode({
   selected,
   isConnectable,
 }: NodeProps<ChenNode>) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const { stroke: customStroke, fill: customFill } = getNodeColors(
+    data?.color as string | undefined,
+    isDark
+  );
+
   return (
     <>
       <ChenNodeResizer isVisible={selected} minWidth={10} minHeight={10} />
       <NodeContextMenu id={id} currentType="weakEntity">
         <div
+          style={{
+            backgroundColor: customFill,
+            borderColor: customStroke,
+          }}
           className={cn(
             "group relative w-full h-full min-w-0 min-h-0 p-[1px] rounded-xs border",
             "bg-white dark:bg-card shadow-xs transition-colors duration-100",
@@ -29,7 +42,13 @@ export const WeakEntityNode = memo(function WeakEntityNode({
           )}
         >
           <ChenNodeHandles isConnectable={isConnectable} nodeId={id} />
-          <div className="w-full h-full min-w-0 max-w-full p-0 rounded-xs border border-border bg-white dark:bg-card text-card-foreground font-semibold text-xs tracking-tight flex items-center justify-center whitespace-nowrap leading-none">
+          <div
+            style={{
+              backgroundColor: customFill,
+              borderColor: customStroke,
+            }}
+            className="w-full h-full min-w-0 max-w-full p-0 rounded-xs border border-border bg-white dark:bg-card text-card-foreground font-semibold text-xs tracking-tight flex items-center justify-center whitespace-nowrap leading-none"
+          >
             <InlineNodeText id={id} label={data.label as string} />
           </div>
         </div>

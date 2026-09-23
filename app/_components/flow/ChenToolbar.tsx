@@ -20,8 +20,8 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import * as Slider from "@radix-ui/react-slider";
 import {
   Trash2,
   Maximize,
@@ -29,21 +29,21 @@ import {
   HelpCircle,
   MousePointer,
   Hand,
-  Download,
-  FileCode,
-  FileText,
   Shapes,
-  ChevronDown,
   Undo2,
   Redo2,
   Workflow,
   ArrowDown,
   ArrowRight,
+  Palette,
+  SlidersHorizontal,
 } from "lucide-react";
 import type { ChenNodeType, FlowLayoutDirection } from "./types";
 import { DraggableShapeItem } from "./DraggableShapeItem";
 import { ShapesPalette } from "./ShapesPalette";
 import { flowchartShapes } from "./flowchartShapes";
+import { NodeColorGrid } from "./NodeColorPicker";
+import { getNodeColors } from "./nodeColors";
 import { cn } from "cn";
 
 export type InteractionMode = "pointer" | "hand";
@@ -55,7 +55,6 @@ interface ChenToolbarProps {
   onClear: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
-  onExport: (format: "png" | "svg" | "pdf") => void;
   canUndo?: boolean;
   canRedo?: boolean;
   onUndo?: () => void;
@@ -66,6 +65,11 @@ interface ChenToolbarProps {
   isDragging?: boolean;
   layoutDirection?: FlowLayoutDirection;
   onAutoLayout?: (direction: FlowLayoutDirection) => void;
+  selectedNodeCount?: number;
+  selectedNodeColor?: string;
+  onNodeColorChange?: (color: string) => void;
+  nodeSpacing?: number;
+  onSpacingChange?: (spacing: number) => void;
 }
 
 export function ChenToolbar({
@@ -75,7 +79,6 @@ export function ChenToolbar({
   onClear,
   isFullscreen,
   onToggleFullscreen,
-  onExport,
   canUndo = false,
   canRedo = false,
   onUndo,
@@ -86,11 +89,18 @@ export function ChenToolbar({
   isDragging = false,
   layoutDirection,
   onAutoLayout,
+  selectedNodeCount = 0,
+  selectedNodeColor,
+  onNodeColorChange,
+  nodeSpacing = 60,
+  onSpacingChange,
 }: ChenToolbarProps) {
   const [localPaletteOpen, setLocalPaletteOpen] = useState(false);
   const paletteOpen = controlledPaletteOpen ?? localPaletteOpen;
   const handleTogglePalette = onTogglePalette ?? (() => setLocalPaletteOpen((prev) => !prev));
   const handleClosePalette = onClosePalette ?? (() => setLocalPaletteOpen(false));
+
+  const { stroke: selectedNodeStroke } = getNodeColors(selectedNodeColor);
 
   // Quick access essential shapes for the minimized bar
   const quickShapes: { type: ChenNodeType; name: string; description: string; icon: React.ReactNode }[] = [
@@ -302,6 +312,56 @@ export function ChenToolbar({
         {/* Horizontal Divider */}
         <div className="w-4.5 h-px bg-border my-0.5" />
 
+        {/* Node Color Picker (Shows only when clicking on any node) */}
+        {selectedNodeCount > 0 && (
+          <>
+            <DropdownMenu>
+              <Tooltip>
+                <DropdownMenuTrigger
+                  render={
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className={cn(
+                            "size-7.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-all active:scale-95 cursor-pointer relative",
+                            selectedNodeColor && "text-foreground bg-accent/60"
+                          )}
+                        >
+                          <Palette className="size-3.5" />
+                          {selectedNodeStroke && (
+                            <span
+                              className="absolute bottom-1 right-1 size-1.5 rounded-full ring-1 ring-background"
+                              style={{ backgroundColor: selectedNodeStroke }}
+                            />
+                          )}
+                        </Button>
+                      }
+                    />
+                  }
+                />
+                <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
+                  Select Color
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent
+                side="left"
+                align="center"
+                sideOffset={8}
+                className="w-auto p-1 shadow-xl rounded-xl"
+              >
+                <NodeColorGrid
+                  currentColor={selectedNodeColor}
+                  onSelectColor={(color) => onNodeColorChange?.(color)}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="w-4.5 h-px bg-border my-0.5" />
+          </>
+        )}
+
         {/* View & Canvas Actions */}
         <div className="flex flex-col items-center gap-0.5">
           {/* Auto Format Layout Toggle Button (Vertical <-> Horizontal) */}
@@ -338,6 +398,110 @@ export function ChenToolbar({
             </TooltipContent>
           </Tooltip>
 
+          {/* Node Spacing Range Slider Dropdown */}
+          <DropdownMenu>
+            <Tooltip>
+              <DropdownMenuTrigger
+                render={
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-7.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-all active:scale-95 cursor-pointer outline-none flex items-center justify-center"
+                      >
+                        <SlidersHorizontal className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                }
+              />
+              <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
+                Node Spacing: Small &ndash; Large
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent
+              side="left"
+              align="center"
+              sideOffset={8}
+              className="w-56 p-3 shadow-xl rounded-xl"
+            >
+              <div
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="flex flex-col gap-2.5 select-none"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground">Node Spacing</span>
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {nodeSpacing}px ({nodeSpacing <= 35 ? "Small" : nodeSpacing >= 95 ? "Large" : "Medium"})
+                  </span>
+                </div>
+
+                <div className="py-1">
+                  <Slider.Root
+                    className="relative flex h-4 w-full touch-none select-none items-center cursor-pointer"
+                    min={20}
+                    max={150}
+                    step={5}
+                    value={[nodeSpacing]}
+                    onValueChange={([val]: number[]) => onSpacingChange?.(val)}
+                  >
+                    <Slider.Track className="relative h-2 w-full grow rounded-full bg-secondary">
+                      <Slider.Range className="absolute h-full rounded-full bg-primary" />
+                    </Slider.Track>
+                    <Slider.Thumb className="block size-4 rounded-full border border-primary/50 bg-background shadow transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer" />
+                  </Slider.Root>
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium px-0.5">
+                  <span>Small</span>
+                  <span>Medium</span>
+                  <span>Large</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-border/60">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => onSpacingChange?.(30)}
+                    className={cn(
+                      "h-6 px-1 text-[10px] cursor-pointer",
+                      nodeSpacing <= 40 && "bg-primary! text-primary-foreground! hover:bg-primary/90!"
+                    )}
+                  >
+                    Small
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => onSpacingChange?.(60)}
+                    className={cn(
+                      "h-6 px-1 text-[10px] cursor-pointer",
+                      nodeSpacing > 40 && nodeSpacing < 85 && "bg-primary! text-primary-foreground! hover:bg-primary/90!"
+                    )}
+                  >
+                    Medium
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => onSpacingChange?.(100)}
+                    className={cn(
+                      "h-6 px-1 text-[10px] cursor-pointer",
+                      nodeSpacing >= 85 && "bg-primary! text-primary-foreground! hover:bg-primary/90!"
+                    )}
+                  >
+                    Large
+                  </Button>
+                </div>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Full Screen Toggle */}
           <Tooltip>
             <TooltipTrigger
@@ -361,52 +525,7 @@ export function ChenToolbar({
             </TooltipContent>
           </Tooltip>
 
-          {/* Export Dropdown */}
-          <DropdownMenu>
-            <Tooltip>
-              <DropdownMenuTrigger
-                render={
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-7.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-all active:scale-95 cursor-pointer"
-                      >
-                        <Download className="size-3.5" />
-                      </Button>
-                    }
-                  />
-                }
-              />
-              <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
-                Export Diagram
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent side="left" align="center" sideOffset={8} className="w-40 text-xs">
-              <DropdownMenuItem
-                onClick={() => onExport("png")}
-                className="gap-2 cursor-pointer"
-              >
-                <FileText className="size-3.5 text-muted-foreground" />
-                <span>Export as PNG</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onExport("svg")}
-                className="gap-2 cursor-pointer"
-              >
-                <FileCode className="size-3.5 text-muted-foreground" />
-                <span>Export as SVG</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onExport("pdf")}
-                className="gap-2 cursor-pointer"
-              >
-                <FileText className="size-3.5 text-muted-foreground" />
-                <span>Export as PDF</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+
 
           {/* Clear Canvas Action */}
           <Tooltip>

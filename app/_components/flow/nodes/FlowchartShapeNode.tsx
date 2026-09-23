@@ -8,6 +8,7 @@ import { InlineNodeText } from "../InlineNodeText";
 import { NodeContextMenu } from "../NodeContextMenu";
 import { flowchartShapes } from "../flowchartShapes";
 import { ChenNodeResizer } from "../ChenNodeResizer";
+import { getNodeColors } from "../nodeColors";
 import { useTheme } from "next-themes";
 import { cn } from "cn";
 
@@ -32,6 +33,11 @@ export const FlowchartShapeNode = memo(function FlowchartShapeNode({
 
   const { width, height } = meta;
 
+  const { stroke: customStroke, fill: customFill } = getNodeColors(
+    data?.color as string | undefined,
+    isDark
+  );
+
   return (
     <>
       <ChenNodeResizer
@@ -53,7 +59,8 @@ export const FlowchartShapeNode = memo(function FlowchartShapeNode({
             {meta.renderSvg({
               className: "w-full h-full drop-shadow-2xs",
               selected,
-              fillColor: "currentColor",
+              fillColor: customFill || "currentColor",
+              strokeColor: customStroke,
               isDark,
             })}
           </div>

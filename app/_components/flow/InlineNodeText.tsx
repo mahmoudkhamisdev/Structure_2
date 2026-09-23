@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { useReactFlow } from "@xyflow/react";
 import { cn } from "cn";
-import { computeNodeDimensions } from "./flowParser";
+import { useFlowStore } from "@/store/useFlowStore";
 
 interface InlineNodeTextProps {
   id: string;
@@ -18,7 +17,7 @@ export function InlineNodeText({
   className,
   underlined = false,
 }: InlineNodeTextProps) {
-  const { setNodes } = useReactFlow();
+  const updateNodeLabel = useFlowStore((s) => s.updateNodeLabel);
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(label || "");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -35,28 +34,7 @@ export function InlineNodeText({
   }, [isEditing]);
 
   const updateNodeDirectly = (newVal: string) => {
-    setNodes((nodes) =>
-      nodes.map((node) => {
-        if (node.id === id) {
-          const dims = computeNodeDimensions(node.type || "process", newVal || " ");
-          return {
-            ...node,
-            width: dims.width,
-            height: dims.height,
-            style: {
-              ...node.style,
-              width: dims.width,
-              height: dims.height,
-            },
-            data: {
-              ...node.data,
-              label: newVal,
-            },
-          };
-        }
-        return node;
-      })
-    );
+    updateNodeLabel(id, newVal);
   };
 
   const handleFinish = () => {

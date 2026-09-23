@@ -8,6 +8,7 @@ import { InlineNodeText } from "../InlineNodeText";
 import { NodeContextMenu } from "../NodeContextMenu";
 import { ChenNodeResizer } from "../ChenNodeResizer";
 import { useTheme } from "next-themes";
+import { getNodeColors } from "../nodeColors";
 import { cn } from "cn";
 
 export const IdentifyingRelNode = memo(function IdentifyingRelNode({
@@ -18,6 +19,11 @@ export const IdentifyingRelNode = memo(function IdentifyingRelNode({
 }: NodeProps<ChenNode>) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+  const { stroke: customStroke, fill: customFill } = getNodeColors(
+    data?.color as string | undefined,
+    isDark
+  );
+
   return (
     <>
       <ChenNodeResizer isVisible={selected} minWidth={10} minHeight={10} />
@@ -40,11 +46,12 @@ export const IdentifyingRelNode = memo(function IdentifyingRelNode({
             <polygon
               points="50,2 98,50 50,98 2,50"
               fill={
-                isDark
+                customFill ||
+                (isDark
                   ? (selected ? "#27272a" : "#18181b")
-                  : (selected ? "#eff6ff" : "#ffffff")
+                  : (selected ? "#eff6ff" : "#ffffff"))
               }
-              stroke={selected ? "var(--primary)" : "var(--border)"}
+              stroke={customStroke || (selected ? "var(--primary)" : "var(--border)")}
               strokeWidth={selected ? 2 : 1.5}
               vectorEffect="non-scaling-stroke"
             />
@@ -53,7 +60,7 @@ export const IdentifyingRelNode = memo(function IdentifyingRelNode({
               points="50,8 92,50 50,92 8,50"
               style={{
                 fill: "transparent",
-                stroke: selected ? "var(--primary)" : "var(--border)",
+                stroke: customStroke || (selected ? "var(--primary)" : "var(--border)"),
                 strokeWidth: 1.2,
               }}
               className="transition-colors"

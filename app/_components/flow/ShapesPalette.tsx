@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Search, X, Layers, Sparkles, Type } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +17,7 @@ export interface PaletteShapeItem {
   name: string;
   category: "process" | "data" | "logic" | "connectors";
   description: string;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
 }
 
 export const allPaletteShapes: PaletteShapeItem[] = Object.values(flowchartShapes).map((s) => ({
@@ -23,7 +25,6 @@ export const allPaletteShapes: PaletteShapeItem[] = Object.values(flowchartShape
   name: s.name,
   category: s.category,
   description: s.description,
-  icon: s.renderSvg({ className: "max-h-7 max-w-full" }),
 }));
 
 interface ShapesPaletteProps {
@@ -31,9 +32,43 @@ interface ShapesPaletteProps {
   onClose: () => void;
   onAddNode: (type: ChenNodeType, label?: string) => void;
   isDragging?: boolean;
+  className?: string;
+  portal?: boolean;
 }
 
-export function ShapesPalette({ open, onClose, onAddNode, isDragging = false }: ShapesPaletteProps) {
+export function ShapesPalette({
+  open,
+  onClose,
+  onAddNode,
+  isDragging = false,
+  className,
+  portal = false,
+}: ShapesPaletteProps) {
+  const { resolvedTheme } = useTheme();
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const updateThemeState = () => {
+      const isHtmlDark = document.documentElement.classList.contains("dark");
+      setIsDark(isHtmlDark);
+    };
+
+    updateThemeState();
+
+    const observer = new MutationObserver(updateThemeState);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, [resolvedTheme]);
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("all");
   const paletteRef = React.useRef<HTMLDivElement>(null);
@@ -86,13 +121,16 @@ export function ShapesPalette({ open, onClose, onAddNode, isDragging = false }: 
 
   if (!open) return null;
 
-  return (
+  const paletteContent = (
     <div
       ref={paletteRef}
       aria-label="Flowchart Shapes Palette"
       className={cn(
-        "absolute right-14 top-1/2 -translate-y-1/2 z-30 w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150",
-        isDragging && "opacity-0! pointer-events-none"
+        portal
+          ? "fixed right-16 top-1/2 -translate-y-1/2 z-50 w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150"
+          : "absolute right-14 top-1/2 -translate-y-1/2 z-30 w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150",
+        isDragging && "opacity-0! pointer-events-none",
+        className
       )}
     >
       {/* Header with Search and Close */}
@@ -155,22 +193,32 @@ export function ShapesPalette({ open, onClose, onAddNode, isDragging = false }: 
             No shapes match "{search}"
           </div>
         ) : (
-          filteredShapes.map((shape) => (
-            <DraggableShapeItem
-              key={shape.type}
-              type={shape.type}
-              name={shape.name}
-              description={shape.description}
-              icon={shape.icon}
-              onAddNode={(type, label) => {
-                onAddNode(type, label);
-                onClose();
-              }}
-              variant="card"
-            />
-          ))
+          filteredShapes.map((shape) => {
+            const meta = flowchartShapes[shape.type as FlowchartNodeType];
+            const icon = meta ? meta.renderSvg({ className: "max-h-7 max-w-full", isDark }) : shape.icon;
+            return (
+              <DraggableShapeItem
+                key={shape.type}
+                type={shape.type}
+                name={shape.name}
+                description={shape.description}
+                icon={icon}
+                onAddNode={(type, label) => {
+                  onAddNode(type, label);
+                  onClose();
+                }}
+                variant="card"
+              />
+            );
+          })
         )}
       </div>
     </div>
   );
+
+  if (portal && typeof document !== "undefined") {
+    return createPortal(paletteContent, document.body);
+  }
+
+  return paletteContent;
 }

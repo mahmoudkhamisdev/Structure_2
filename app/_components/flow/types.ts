@@ -45,6 +45,7 @@ export interface ChenNodeData extends Record<string, unknown> {
   label: string;
   description?: string;
   isEditing?: boolean;
+  color?: string;
 }
 
 export type ChenNode = Node<ChenNodeData, ChenNodeType>;

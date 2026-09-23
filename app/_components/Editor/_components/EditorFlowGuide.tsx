@@ -29,6 +29,15 @@ Nodes & Shapes:
 - [/Input or Output Data/] : Data I/O (parallelogram)
 - [[Subroutine Name]] : Predefined process / subroutine
 
+Node Colors (Optional):
+- Attach #color to any node. The border and background match the color automatically.
+- Supported colors: #blue, #green (or #emerald), #amber (or #yellow), #red (or #rose), #purple, #indigo, #cyan, #orange, #pink, or hex like #3b82f6.
+- Syntax examples:
+  [Process Name] #blue
+  (Start) #green -> [Process Step] #blue -> <Verify?> #amber
+  <Verify?> -- Valid -> [(Database)] #purple
+  <Verify?> -- Invalid -> [Show Error] #red
+
 Connections & Branches:
 - Direct arrow: [Node A] -> [Node B]
 - Labeled branch: <Condition?> -- Yes -> [Node B]
@@ -43,12 +52,12 @@ Formatting Rules:
 
 Example:
 # User Authentication Flow
-[Start] -> [Input Credentials]
-[Input Credentials] -> <Verify Account>
-<Verify Account> -- Valid -> [(User Database)]
-[(User Database)] -> [Open Dashboard]
-[Open Dashboard] -> (End)
-<Verify Account> -- Invalid -> [Show Error Alert]
+(Start) #green -> [Input Credentials] #blue
+[Input Credentials] -> <Verify Account> #amber
+<Verify Account> -- Valid -> [(User Database)] #purple
+[(User Database)] -> [Open Dashboard] #blue
+[Open Dashboard] -> (End) #green
+<Verify Account> -- Invalid -> [Show Error Alert] #red
 [Show Error Alert] -> [Input Credentials]`;
 
 export function EditorFlowGuide() {

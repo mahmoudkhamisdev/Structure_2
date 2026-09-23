@@ -129,6 +129,7 @@ interface RawNode {
   id: string;
   label: string;
   type: ChenNodeType;
+  color?: string;
 }
 
 interface RawEdge {
@@ -138,52 +139,79 @@ interface RawEdge {
 }
 
 /**
- * Parses a raw token like "[Process]", "<Decision>", "[(Database)]", "(Start)" into label and shape type
+ * Parses a raw token like "[Process] #blue", "<Decision>", "[(Database)]", "(Start)" into label, shape type, and optional color
  */
-function parseNodeToken(rawToken: string): { label: string; type: ChenNodeType } {
-  const token = rawToken.trim();
+function parseNodeToken(rawToken: string): { label: string; type: ChenNodeType; color?: string } {
+  let token = rawToken.trim();
+  let color: string | undefined = undefined;
+
+  // Check for trailing #color e.g. [Process] #blue or (Start) #3b82f6
+  const trailingColorMatch = token.match(/\s+#([a-zA-Z0-9_-]+)\s*$/);
+  if (trailingColorMatch) {
+    color = trailingColorMatch[1];
+    token = token.slice(0, trailingColorMatch.index).trim();
+  }
+
+  // Helper to extract inner color like [Process | blue] or [Process: blue]
+  const extractInnerColor = (rawLabel: string) => {
+    let lbl = rawLabel.trim();
+    if (!color) {
+      if (lbl.includes("|")) {
+        const parts = lbl.split("|");
+        lbl = parts[0].trim();
+        color = parts[1].trim().replace(/^#/, "");
+      } else {
+        const colonMatch = lbl.match(/^(.+?):\s*([a-zA-Z]+|#[0-9a-fA-F]{3,8})$/);
+        if (colonMatch) {
+          lbl = colonMatch[1].trim();
+          color = colonMatch[2].trim().replace(/^#/, "");
+        }
+      }
+    }
+    return lbl;
+  };
 
   // [(Database)] -> cylinder database
   if (token.startsWith("[(") && token.endsWith(")]")) {
-    return { label: token.slice(2, -2).trim(), type: "database" };
+    return { label: extractInnerColor(token.slice(2, -2)), type: "database", color };
   }
   // [[Subroutine]] -> subroutine
   if (token.startsWith("[[") && token.endsWith("]]")) {
-    return { label: token.slice(2, -2).trim(), type: "subroutine" };
+    return { label: extractInnerColor(token.slice(2, -2)), type: "subroutine", color };
   }
   // [/Data/] or [\Data\] -> data/io
   if ((token.startsWith("[/") && token.endsWith("/]")) || (token.startsWith("[\x5C") && token.endsWith("\x5C]"))) {
-    return { label: token.slice(2, -2).trim(), type: "data" };
+    return { label: extractInnerColor(token.slice(2, -2)), type: "data", color };
   }
   // ([Terminator]) or (Terminator) -> terminator (pill)
   if (token.startsWith("([") && token.endsWith("])")) {
-    return { label: token.slice(2, -2).trim(), type: "terminator" };
+    return { label: extractInnerColor(token.slice(2, -2)), type: "terminator", color };
   }
   if (token.startsWith("(") && token.endsWith(")")) {
-    return { label: token.slice(1, -1).trim(), type: "terminator" };
+    return { label: extractInnerColor(token.slice(1, -1)), type: "terminator", color };
   }
   // <Decision> or {Decision} -> decision (diamond)
   if (token.startsWith("<") && token.endsWith(">")) {
-    return { label: token.slice(1, -1).trim(), type: "decision" };
+    return { label: extractInnerColor(token.slice(1, -1)), type: "decision", color };
   }
   if (token.startsWith("{") && token.endsWith("}")) {
-    return { label: token.slice(1, -1).trim(), type: "decision" };
+    return { label: extractInnerColor(token.slice(1, -1)), type: "decision", color };
   }
   // [Process] -> process (rectangle)
   if (token.startsWith("[") && token.endsWith("]")) {
-    return { label: token.slice(1, -1).trim(), type: "process" };
+    return { label: extractInnerColor(token.slice(1, -1)), type: "process", color };
   }
 
   // Plain word heuristics (e.g. Start, End, Is Valid?)
   const lower = token.toLowerCase();
   if (lower === "start" || lower === "end" || lower === "stop") {
-    return { label: token, type: "terminator" };
+    return { label: token, type: "terminator", color };
   }
   if (token.endsWith("?")) {
-    return { label: token, type: "decision" };
+    return { label: token, type: "decision", color };
   }
 
-  return { label: token, type: "process" };
+  return { label: extractInnerColor(token), type: "process", color };
 }
 
 /**
@@ -203,7 +231,8 @@ function normalizeId(label: string): string {
 export function layoutNodesAndEdges(
   nodes: ChenNode[],
   edges: ChenEdge[],
-  direction: FlowLayoutDirection = "TB"
+  direction: FlowLayoutDirection = "TB",
+  nodeSpacing: number = 60
 ): { nodes: ChenNode[]; edges: ChenEdge[] } {
   if (nodes.length === 0) {
     return { nodes: [], edges: [] };
@@ -295,7 +324,7 @@ export function layoutNodesAndEdges(
       });
 
       const maxHeight = Math.max(...nodeDims.map((d) => d.height), 48);
-      const gapX = 48;
+      const gapX = Math.max(12, Math.round(nodeSpacing * 0.8));
       const totalLayerWidth =
         nodeDims.reduce((acc, d) => acc + d.width, 0) +
         Math.max(0, layerNodes.length - 1) * gapX;
@@ -317,7 +346,7 @@ export function layoutNodesAndEdges(
         });
       });
 
-      currentY += maxHeight + 85;
+      currentY += maxHeight + Math.max(20, Math.round(nodeSpacing * 1.4));
     });
   } else {
     // Horizontal layout (Left to Right): each layer is a vertical column
@@ -336,7 +365,7 @@ export function layoutNodesAndEdges(
       });
 
       const maxWidth = Math.max(...nodeDims.map((d) => d.width), 120);
-      const gapY = 36;
+      const gapY = Math.max(12, Math.round(nodeSpacing * 0.6));
       const totalLayerHeight =
         nodeDims.reduce((acc, d) => acc + d.height, 0) +
         Math.max(0, layerNodes.length - 1) * gapY;
@@ -358,7 +387,7 @@ export function layoutNodesAndEdges(
         });
       });
 
-      currentX += maxWidth + 95;
+      currentX += maxWidth + Math.max(25, Math.round(nodeSpacing * 1.5));
     });
   }
 
@@ -441,7 +470,8 @@ export function layoutNodesAndEdges(
 export function parseFlowFromMarkdown(
   content: string,
   existingPositions?: Map<string, { x: number; y: number }>,
-  defaultDirection: FlowLayoutDirection = "TB"
+  defaultDirection: FlowLayoutDirection = "TB",
+  nodeSpacing: number = 60
 ): ParsedFlowResult {
   if (!content || !content.trim()) {
     return { nodes: [], edges: [], hasFlowDefinitions: false };
@@ -520,20 +550,24 @@ export function parseFlowFromMarkdown(
       // Register nodes and connect along the chain
       for (let i = 0; i < chainNodes.length; i++) {
         const token = chainNodes[i];
-        const { label, type } = parseNodeToken(token);
+        const { label, type, color } = parseNodeToken(token);
         const id = normalizeId(label);
 
         if (!rawNodesMap.has(id)) {
-          rawNodesMap.set(id, { id, label, type });
+          rawNodesMap.set(id, { id, label, type, color });
+        } else if (color) {
+          rawNodesMap.get(id)!.color = color;
         }
 
         if (i < chainNodes.length - 1) {
           const nextToken = chainNodes[i + 1];
-          const { label: nextLabel, type: nextType } = parseNodeToken(nextToken);
+          const { label: nextLabel, type: nextType, color: nextColor } = parseNodeToken(nextToken);
           const nextId = normalizeId(nextLabel);
 
           if (!rawNodesMap.has(nextId)) {
-            rawNodesMap.set(nextId, { id: nextId, label: nextLabel, type: nextType });
+            rawNodesMap.set(nextId, { id: nextId, label: nextLabel, type: nextType, color: nextColor });
+          } else if (nextColor) {
+            rawNodesMap.get(nextId)!.color = nextColor;
           }
 
           rawEdges.push({
@@ -544,14 +578,32 @@ export function parseFlowFromMarkdown(
         }
       }
     } else {
-      // Check for standalone node like [My Process] or (Start)
-      const standaloneMatch = trimmed.match(/^([\[({<].+?[\])}>])\s*$/);
+      // Check for style directive: style [Process] #blue or style Process blue
+      const styleMatch = trimmed.match(/^style\s+(.+?)\s+(?:fill:)?(#?[a-zA-Z0-9_-]+)$/i);
+      if (styleMatch) {
+        foundAnyFlowSyntax = true;
+        const targetToken = styleMatch[1].trim();
+        const styleColor = styleMatch[2].trim().replace(/^#/, "");
+        const { label } = parseNodeToken(targetToken);
+        const id = normalizeId(label);
+        if (rawNodesMap.has(id)) {
+          rawNodesMap.get(id)!.color = styleColor;
+        } else {
+          rawNodesMap.set(id, { id, label, type: "process", color: styleColor });
+        }
+        continue;
+      }
+
+      // Check for standalone node like [My Process] #blue or (Start)
+      const standaloneMatch = trimmed.match(/^([\[({<].+?[\])}>](?:\s+#[a-zA-Z0-9_-]+)?)\s*$/);
       if (standaloneMatch) {
         foundAnyFlowSyntax = true;
-        const { label, type } = parseNodeToken(standaloneMatch[1]);
+        const { label, type, color } = parseNodeToken(standaloneMatch[1]);
         const id = normalizeId(label);
         if (!rawNodesMap.has(id)) {
-          rawNodesMap.set(id, { id, label, type });
+          rawNodesMap.set(id, { id, label, type, color });
+        } else if (color) {
+          rawNodesMap.get(id)!.color = color;
         }
       }
     }
@@ -570,7 +622,10 @@ export function parseFlowFromMarkdown(
       width,
       height,
       style: { width, height },
-      data: { label: raw.label },
+      data: {
+        label: raw.label,
+        color: raw.color,
+      },
     };
   });
 
@@ -590,7 +645,7 @@ export function parseFlowFromMarkdown(
     },
   }));
 
-  const layouted = layoutNodesAndEdges(initialNodes, initialEdges, detectedDirection);
+  const layouted = layoutNodesAndEdges(initialNodes, initialEdges, detectedDirection, nodeSpacing);
 
   // If user has saved/dragged positions, respect them
   if (existingPositions && existingPositions.size > 0) {
@@ -645,3 +700,165 @@ export function parseFlowFromMarkdown(
   };
 }
 
+/**
+ * Updates or adds a node color (#color) in the markdown document
+ */
+export function updateNodeColorInMarkdown(
+  content: string,
+  nodeLabel: string,
+  newColor?: string
+): string {
+  if (!content || !nodeLabel) return content;
+
+  const escaped = nodeLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Matches [Label], (Label), <Label>, etc., optionally with an existing #color
+  const pattern = new RegExp(
+    `([\\[({<]+${escaped}[\\xy})\\]>]+)(?:\\s+#[a-zA-Z0-9_-]+)?`,
+    "g"
+  );
+
+  if (newColor && newColor !== "default") {
+    const cleanColor = newColor.replace(/^#/, "");
+    if (pattern.test(content)) {
+      return content.replace(pattern, `$1 #${cleanColor}`);
+    } else {
+      return `${content.trim()}\n[${nodeLabel}] #${cleanColor}\n`;
+    }
+  } else {
+    // Remove color tag
+    return content.replace(pattern, `$1`);
+  }
+}
+
+/**
+ * Converts a node into its bracketed token syntax representation
+ */
+export function nodeToToken(node: ChenNode, includeColor: boolean = true): string {
+  let label = (node.data?.label as string)?.trim() || "Step";
+  // Strip outer matching brackets if user typed them into label
+  if (
+    (label.startsWith("[") && label.endsWith("]")) ||
+    (label.startsWith("(") && label.endsWith(")")) ||
+    (label.startsWith("{") && label.endsWith("}")) ||
+    (label.startsWith("<") && label.endsWith(">"))
+  ) {
+    label = label.slice(1, -1).trim();
+  }
+
+  const type = node.type || "process";
+  const color = node.data?.color as string | undefined;
+  const colorSuffix =
+    includeColor && color && color !== "default"
+      ? ` #${color.replace(/^#/, "")}`
+      : "";
+
+  let token = `[${label}]`;
+  if (type === "terminator") {
+    token = `(${label})`;
+  } else if (type === "decision") {
+    token = `{${label}}`;
+  } else if (type === "database") {
+    token = `[(${label})]`;
+  } else if (type === "subroutine") {
+    token = `[[${label}]]`;
+  } else if (type === "data") {
+    token = `[/${label}/]`;
+  } else {
+    token = `[${label}]`;
+  }
+
+  return `${token}${colorSuffix}`;
+}
+
+/**
+ * Serializes nodes, edges, and direction back into flowchart markdown syntax.
+ * Preserves leading header comments (# Title, // comments) from existing document.
+ */
+export function serializeFlowToMarkdown(
+  nodes: ChenNode[],
+  edges: ChenEdge[],
+  direction: FlowLayoutDirection = "TB",
+  existingContent: string = ""
+): string {
+  // Extract leading comment or markdown title lines (# Header, // Comment)
+  const headerLines: string[] = [];
+  if (existingContent) {
+    const lines = existingContent.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (
+        trimmed.startsWith("#") ||
+        trimmed.startsWith("//") ||
+        trimmed.startsWith("/*")
+      ) {
+        headerLines.push(line);
+      } else if (!trimmed && headerLines.length > 0) {
+        headerLines.push(line);
+      } else {
+        break;
+      }
+    }
+  }
+
+  const headerStr = headerLines.join("\n").trim();
+
+  // If all nodes are removed (e.g. user cleared canvas or deleted all)
+  if (nodes.length === 0) {
+    return headerStr ? `${headerStr}\n\nflowchart ${direction}\n` : `flowchart ${direction}\n`;
+  }
+
+  const outputLines: string[] = [];
+
+  // 1. Add preserved comments/title if any
+  if (headerStr) {
+    outputLines.push(headerStr);
+    outputLines.push("");
+  }
+
+  // 2. Direction header
+  outputLines.push(`flowchart ${direction}`);
+
+  // 3. Connect nodes via edges
+  const nodeMap = new Map<string, ChenNode>();
+  for (const n of nodes) {
+    nodeMap.set(n.id, n);
+  }
+
+  const emittedColors = new Set<string>();
+  const connectedNodeIds = new Set<string>();
+
+  for (const edge of edges) {
+    const sourceNode = nodeMap.get(edge.source);
+    const targetNode = nodeMap.get(edge.target);
+
+    if (sourceNode && targetNode) {
+      connectedNodeIds.add(sourceNode.id);
+      connectedNodeIds.add(targetNode.id);
+
+      const sourceHasColor = !emittedColors.has(sourceNode.id);
+      if (sourceHasColor) emittedColors.add(sourceNode.id);
+
+      const targetHasColor = !emittedColors.has(targetNode.id);
+      if (targetHasColor) emittedColors.add(targetNode.id);
+
+      const sourceToken = nodeToToken(sourceNode, sourceHasColor);
+      const targetToken = nodeToToken(targetNode, targetHasColor);
+      const label = (edge.data?.label as string)?.trim();
+
+      if (label) {
+        outputLines.push(`    ${sourceToken} -- ${label} --> ${targetToken}`);
+      } else {
+        outputLines.push(`    ${sourceToken} --> ${targetToken}`);
+      }
+    }
+  }
+
+  // 4. Standalone nodes (nodes not connected to any edge)
+  for (const node of nodes) {
+    if (!connectedNodeIds.has(node.id)) {
+      outputLines.push(`    ${nodeToToken(node, true)}`);
+    }
+  }
+
+  return outputLines.join("\n") + "\n";
+}

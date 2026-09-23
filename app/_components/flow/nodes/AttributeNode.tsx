@@ -7,6 +7,8 @@ import { ChenNodeHandles } from "../handles";
 import { InlineNodeText } from "../InlineNodeText";
 import { NodeContextMenu } from "../NodeContextMenu";
 import { ChenNodeResizer } from "../ChenNodeResizer";
+import { useTheme } from "next-themes";
+import { getNodeColors } from "../nodeColors";
 import { cn } from "cn";
 
 export const AttributeNode = memo(function AttributeNode({
@@ -15,11 +17,22 @@ export const AttributeNode = memo(function AttributeNode({
   selected,
   isConnectable,
 }: NodeProps<ChenNode>) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const { stroke: customStroke, fill: customFill } = getNodeColors(
+    data?.color as string | undefined,
+    isDark
+  );
+
   return (
     <>
       <ChenNodeResizer isVisible={selected} minWidth={10} minHeight={10} />
       <NodeContextMenu id={id} currentType="attribute">
         <div
+          style={{
+            backgroundColor: customFill,
+            borderColor: customStroke,
+          }}
           className={cn(
             "group relative w-full h-full min-w-0 min-h-0 p-0 rounded-full",
             "border bg-white dark:bg-card text-card-foreground shadow-2xs",

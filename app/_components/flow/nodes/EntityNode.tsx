@@ -7,6 +7,8 @@ import { ChenNodeHandles } from "../handles";
 import { InlineNodeText } from "../InlineNodeText";
 import { NodeContextMenu } from "../NodeContextMenu";
 import { ChenNodeResizer } from "../ChenNodeResizer";
+import { useTheme } from "next-themes";
+import { getNodeColors } from "../nodeColors";
 import { cn } from "cn";
 
 export const EntityNode = memo(function EntityNode({
@@ -15,11 +17,22 @@ export const EntityNode = memo(function EntityNode({
   selected,
   isConnectable,
 }: NodeProps<ChenNode>) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const { stroke: customStroke, fill: customFill } = getNodeColors(
+    data?.color as string | undefined,
+    isDark
+  );
+
   return (
     <>
       <ChenNodeResizer isVisible={selected} minWidth={15} minHeight={15} />
       <NodeContextMenu id={id} currentType="entity">
         <div
+          style={{
+            backgroundColor: customFill,
+            borderColor: customStroke,
+          }}
           className={cn(
             "group relative w-full h-full min-w-0 min-h-0 p-0 rounded-xs",
             "border bg-white dark:bg-card text-card-foreground shadow-xs",
