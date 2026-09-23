@@ -18,7 +18,21 @@ export interface FlowchartShapeMeta {
     selected?: boolean;
     fillColor?: string;
     strokeColor?: string;
+    isDark?: boolean;
   }) => React.ReactNode;
+}
+
+export function getShapeFill(selected?: boolean, fillColor?: string, isDark?: boolean): string {
+  if (fillColor && fillColor !== "currentColor") return fillColor;
+  const darkMode =
+    isDark !== undefined
+      ? isDark
+      : typeof document !== "undefined" &&
+        document.documentElement.classList.contains("dark");
+  if (selected) {
+    return darkMode ? "#27272a" : "#eff6ff";
+  }
+  return darkMode ? "#18181b" : "#ffffff";
 }
 
 export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
@@ -31,7 +45,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Start / End",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <rect
           x="2"
@@ -39,8 +53,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
           width="136"
           height="48"
           rx="24"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -56,7 +69,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Process",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <rect
           x="2"
@@ -64,8 +77,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
           width="136"
           height="48"
           rx="4"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -81,7 +93,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Subroutine",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <rect
           x="2"
@@ -89,8 +101,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
           width="136"
           height="48"
           rx="4"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -108,12 +119,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Preparation",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <polygon
           points="22,2 118,2 138,26 118,50 22,50 2,26"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -130,12 +140,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Delay",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <path
           d="M 2 2 L 100 2 A 24 24 0 0 1 100 50 L 2 50 Z"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -153,12 +162,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Data / I/O",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <polygon
           points="24,2 138,2 116,50 2,50"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -175,12 +183,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Document",
     width: 140,
     height: 56,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 56" className={className} fill="none">
         <path
           d="M 2 2 L 138 2 L 138 44 C 114 36, 92 56, 70 48 C 48 40, 26 56, 2 48 Z"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -197,7 +204,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Documents",
     width: 140,
     height: 58,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 58" className={className} fill="none">
         <path
           d="M 12 2 L 138 2 L 138 38 C 118 32, 98 48, 78 42 C 58 36, 40 46, 24 40 Z"
@@ -213,8 +220,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
         />
         <path
           d="M 2 10 L 128 10 L 128 46 C 108 40, 88 56, 68 50 C 48 44, 28 56, 2 48 Z"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -231,12 +237,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Database",
     width: 120,
     height: 64,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 120 64" className={className} fill="none">
         <path
           d="M 4 14 L 4 50 C 4 58, 116 58, 116 50 L 116 14"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -245,8 +250,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
           cy="14"
           rx="56"
           ry="10"
-          fill={fillColor}
-          fillOpacity={0.12}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -274,12 +278,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Stored Data",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <path
           d="M 18 2 L 138 2 C 122 26, 122 26, 138 50 L 18 50 C 34 26, 34 26, 18 2 Z"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -296,7 +299,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Storage",
     width: 130,
     height: 56,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 130 56" className={className} fill="none">
         <rect
           x="2"
@@ -304,8 +307,7 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
           width="126"
           height="52"
           rx="4"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -324,12 +326,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Decision?",
     width: 140,
     height: 64,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 64" className={className} fill="none">
         <polygon
           points="70,2 138,32 70,62 2,32"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -346,12 +347,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Merge",
     width: 120,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 120 60" className={className} fill="none">
         <polygon
           points="2,4 118,4 60,56"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -368,12 +368,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Collate",
     width: 120,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 120 60" className={className} fill="none">
         <polygon
           points="2,2 118,2 2,58 118,58"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -390,12 +389,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Sort",
     width: 130,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 130 60" className={className} fill="none">
         <polygon
           points="65,2 128,30 65,58 2,30"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -413,14 +411,13 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "OR",
     width: 60,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 60 60" className={className} fill="none">
         <circle
           cx="30"
           cy="30"
           r="27"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -438,14 +435,13 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "AND",
     width: 60,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 60 60" className={className} fill="none">
         <circle
           cx="30"
           cy="30"
           r="27"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -464,14 +460,13 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "A",
     width: 52,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 52 52" className={className} fill="none">
         <circle
           cx="26"
           cy="26"
           r="23"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
         />
@@ -487,12 +482,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Page",
     width: 70,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 70 60" className={className} fill="none">
         <polygon
           points="4,4 66,4 66,38 35,56 4,38"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -509,12 +503,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Page",
     width: 70,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 70 60" className={className} fill="none">
         <polygon
           points="35,4 66,22 66,56 4,56 4,22"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -531,12 +524,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Page",
     width: 70,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 70 60" className={className} fill="none">
         <polygon
           points="4,4 48,4 66,30 48,56 4,56"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -553,12 +545,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Page",
     width: 70,
     height: 60,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 70 60" className={className} fill="none">
         <polygon
           points="22,4 66,4 66,56 22,56 4,30"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -575,12 +566,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Display",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <path
           d="M 28 2 L 105 2 C 130 18, 130 34, 105 50 L 28 50 C 4 34, 4 18, 28 2 Z"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -597,12 +587,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Manual Input",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <polygon
           points="2,16 138,2 138,50 2,50"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -619,12 +608,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Manual Loop",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <polygon
           points="2,2 138,2 118,50 22,50"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"
@@ -641,12 +629,11 @@ export const flowchartShapes: Record<FlowchartNodeType, FlowchartShapeMeta> = {
     defaultLabel: "Loop Limit",
     width: 140,
     height: 52,
-    renderSvg: ({ className = "", selected = false, fillColor = "currentColor" }) => (
+    renderSvg: ({ className = "", selected = false, fillColor = "currentColor", isDark }) => (
       <svg preserveAspectRatio="none" viewBox="0 0 140 52" className={className} fill="none">
         <polygon
           points="20,2 120,2 138,18 138,50 2,50 2,18"
-          fill={fillColor}
-          fillOpacity={0.08}
+          fill={getShapeFill(selected, fillColor, isDark)}
           stroke={selected ? "var(--primary)" : "currentColor"}
           strokeWidth={selected ? 2.2 : 1.6}
           strokeLinejoin="round"

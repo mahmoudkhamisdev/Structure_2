@@ -23,9 +23,9 @@ import { chenEdgeTypes } from "./edges/ChenEdge";
 import { initialChenNodes, initialChenEdges } from "./initial-elements";
 import { ChenToolbar, type InteractionMode } from "./ChenToolbar";
 import { flowchartShapes } from "./flowchartShapes";
-import type { ChenNode, ChenEdge, ChenNodeType, FlowchartNodeType } from "./types";
+import type { ChenNode, ChenEdge, ChenNodeType, FlowchartNodeType, FlowLayoutDirection } from "./types";
 import { useContentStore } from "@/store/useContentStore";
-import { parseFlowFromMarkdown, computeNodeDimensions } from "./flowParser";
+import { parseFlowFromMarkdown, computeNodeDimensions, layoutNodesAndEdges } from "./flowParser";
 import { cn } from "cn";
 
 const sensors = [
@@ -90,6 +90,7 @@ function ChenErdFlowInner() {
       }))
     );
   }, [isDark, setEdges]);
+  const [layoutDirection, setLayoutDirection] = useState<FlowLayoutDirection>("TB");
   const [activeDragItem, setActiveDragItem] = useState<{ type: ChenNodeType; label?: string } | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -113,7 +114,7 @@ function ChenErdFlowInner() {
   // Synchronize editor text definitions with Flowchart nodes & edges
   useEffect(() => {
     if (!content) return;
-    const parsed = parseFlowFromMarkdown(content, userPositionsRef.current);
+    const parsed = parseFlowFromMarkdown(content, userPositionsRef.current, layoutDirection);
     if (parsed.hasFlowDefinitions) {
       setNodes(parsed.nodes);
       setEdges(parsed.edges);
@@ -124,7 +125,7 @@ function ChenErdFlowInner() {
         }, 120);
       }
     }
-  }, [content, setNodes, setEdges, reactFlowInstance]);
+  }, [content, layoutDirection, setNodes, setEdges, reactFlowInstance]);
 
   // Track pointer during drag so shape is 100% centered on mouse cursor
   // Use capture phase so stopPropagation in sensors doesn't prevent tracking
@@ -568,6 +569,8 @@ function ChenErdFlowInner() {
               node.classList.contains("react-flow__panel") ||
               node.classList.contains("react-flow__controls") ||
               node.classList.contains("react-flow__attribution") ||
+              node.classList.contains("react-flow__background") ||
+              node.classList.contains("react-flow__minimap") ||
               node.tagName === "ASIDE"
             ) {
               return false;
@@ -576,14 +579,19 @@ function ChenErdFlowInner() {
           return true;
         };
 
-        const isDark = resolvedTheme === "dark";
-        const backgroundColor = isDark ? "#09090b" : "#ffffff";
+        const exportOptions = {
+          filter,
+          backgroundColor: undefined,
+          style: {
+            backgroundColor: "transparent",
+            background: "transparent",
+          },
+        };
 
         if (format === "png") {
           const { toPng } = await import("html-to-image");
           const dataUrl = await toPng(element, {
-            filter,
-            backgroundColor,
+            ...exportOptions,
             pixelRatio: 2,
           });
           const a = document.createElement("a");
@@ -592,10 +600,7 @@ function ChenErdFlowInner() {
           a.click();
         } else if (format === "svg") {
           const { toSvg } = await import("html-to-image");
-          const dataUrl = await toSvg(element, {
-            filter,
-            backgroundColor,
-          });
+          const dataUrl = await toSvg(element, exportOptions);
           const a = document.createElement("a");
           a.href = dataUrl;
           a.download = "flowchart.svg";
@@ -604,8 +609,7 @@ function ChenErdFlowInner() {
           const { toPng } = await import("html-to-image");
           const { jsPDF } = await import("jspdf");
           const dataUrl = await toPng(element, {
-            filter,
-            backgroundColor,
+            ...exportOptions,
             pixelRatio: 2,
           });
           const width = element.offsetWidth;
@@ -620,6 +624,28 @@ function ChenErdFlowInner() {
       }
     },
     [resolvedTheme]
+  );
+
+  // Auto format layout (Vertical or Horizontal)
+  const handleAutoLayout = useCallback(
+    (dir: FlowLayoutDirection) => {
+      takeSnapshot();
+      setLayoutDirection(dir);
+      userPositionsRef.current.clear();
+
+      const result = layoutNodesAndEdges(nodes, edges, dir);
+      for (const n of result.nodes) {
+        userPositionsRef.current.set(n.id, n.position);
+      }
+
+      setNodes(result.nodes);
+      setEdges(result.edges);
+
+      setTimeout(() => {
+        reactFlowInstance.fitView({ padding: 0.2, duration: 400 });
+      }, 50);
+    },
+    [nodes, edges, reactFlowInstance, setNodes, setEdges, takeSnapshot]
   );
 
   // Clear canvas
@@ -669,6 +695,8 @@ function ChenErdFlowInner() {
           onTogglePalette={() => setPaletteOpen((prev) => !prev)}
           onClosePalette={() => setPaletteOpen(false)}
           isDragging={!!activeDragItem}
+          layoutDirection={layoutDirection}
+          onAutoLayout={handleAutoLayout}
         />
 
         {/* Main React Flow Canvas */}

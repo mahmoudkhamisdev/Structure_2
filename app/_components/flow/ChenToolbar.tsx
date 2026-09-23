@@ -36,8 +36,11 @@ import {
   ChevronDown,
   Undo2,
   Redo2,
+  Workflow,
+  ArrowDown,
+  ArrowRight,
 } from "lucide-react";
-import type { ChenNodeType } from "./types";
+import type { ChenNodeType, FlowLayoutDirection } from "./types";
 import { DraggableShapeItem } from "./DraggableShapeItem";
 import { ShapesPalette } from "./ShapesPalette";
 import { flowchartShapes } from "./flowchartShapes";
@@ -61,6 +64,8 @@ interface ChenToolbarProps {
   onTogglePalette?: () => void;
   onClosePalette?: () => void;
   isDragging?: boolean;
+  layoutDirection?: FlowLayoutDirection;
+  onAutoLayout?: (direction: FlowLayoutDirection) => void;
 }
 
 export function ChenToolbar({
@@ -79,6 +84,8 @@ export function ChenToolbar({
   onTogglePalette,
   onClosePalette,
   isDragging = false,
+  layoutDirection,
+  onAutoLayout,
 }: ChenToolbarProps) {
   const [localPaletteOpen, setLocalPaletteOpen] = useState(false);
   const paletteOpen = controlledPaletteOpen ?? localPaletteOpen;
@@ -297,6 +304,40 @@ export function ChenToolbar({
 
         {/* View & Canvas Actions */}
         <div className="flex flex-col items-center gap-0.5">
+          {/* Auto Format Layout Toggle Button (Vertical <-> Horizontal) */}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => {
+                    const nextDir = layoutDirection === "LR" ? "TB" : "LR";
+                    onAutoLayout?.(nextDir);
+                    handleClosePalette();
+                  }}
+                  className={cn(
+                    "size-7.5 rounded-lg transition-all active:scale-95 cursor-pointer outline-none flex items-center justify-center",
+                    layoutDirection === "LR"
+                      ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/80"
+                  )}
+                >
+                  {layoutDirection === "LR" ? (
+                    <ArrowRight className="size-3.5" />
+                  ) : (
+                    <ArrowDown className="size-3.5" />
+                  )}
+                </Button>
+              }
+            />
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
+              {layoutDirection === "LR"
+                ? "Layout: Horizontal (Click for Vertical)"
+                : "Layout: Vertical (Click for Horizontal)"}
+            </TooltipContent>
+          </Tooltip>
+
           {/* Full Screen Toggle */}
           <Tooltip>
             <TooltipTrigger

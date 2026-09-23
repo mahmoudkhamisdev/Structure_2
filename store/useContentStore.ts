@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { Project } from "@/app/_components/Sidebar/types";
 import { initialProjects } from "@/app/_components/Sidebar/constants";
-import { DEFAULT_FLOW_EXAMPLE } from "@/app/_components/Viewer/_components/flow/flowParser";
+import { DEFAULT_FLOW_EXAMPLE } from "@/app/_components/flow/flowParser";
 
 interface ContentState {
   // Projects

@@ -9,7 +9,7 @@ import { NodeContextMenu } from "../NodeContextMenu";
 import { ChenNodeResizer } from "../ChenNodeResizer";
 import { cn } from "cn";
 
-export const AttributeNode = memo(function AttributeNode({
+export const KeyAttributeNode = memo(function KeyAttributeNode({
   id,
   data,
   selected,
@@ -18,13 +18,13 @@ export const AttributeNode = memo(function AttributeNode({
   return (
     <>
       <ChenNodeResizer isVisible={selected} minWidth={10} minHeight={10} />
-      <NodeContextMenu id={id} currentType="attribute">
+      <NodeContextMenu id={id} currentType="keyAttribute">
         <div
           className={cn(
             "group relative w-full h-full min-w-0 min-h-0 p-0 rounded-full",
-            "border bg-card text-card-foreground shadow-2xs",
+            "border bg-white dark:bg-card text-card-foreground shadow-2xs",
             "flex items-center justify-center text-center",
-            "text-xs font-normal transition-colors duration-100",
+            "text-xs transition-colors duration-100",
             selected
               ? "border-primary ring-2 ring-primary/20 shadow-xs"
               : "border-border hover:border-foreground/30 hover:shadow-2xs"
@@ -32,7 +32,12 @@ export const AttributeNode = memo(function AttributeNode({
         >
           <ChenNodeHandles isConnectable={isConnectable} nodeId={id} />
           <div className="min-w-0 max-w-full px-0.5 whitespace-nowrap leading-none flex items-center justify-center">
-            <InlineNodeText id={id} label={data.label as string} />
+            <InlineNodeText
+              id={id}
+              label={data.label as string}
+              underlined={true}
+              className="font-semibold"
+            />
           </div>
         </div>
       </NodeContextMenu>

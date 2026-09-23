@@ -22,7 +22,7 @@ export const EntityNode = memo(function EntityNode({
         <div
           className={cn(
             "group relative w-full h-full min-w-0 min-h-0 p-0 rounded-xs",
-            "border bg-card text-card-foreground shadow-xs",
+            "border bg-white dark:bg-card text-card-foreground shadow-xs",
             "flex items-center justify-center text-center",
             "font-semibold text-xs tracking-tight transition-colors duration-100",
             selected

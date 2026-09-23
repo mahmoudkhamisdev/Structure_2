@@ -1,0 +1,647 @@
+import type { ChenNode, ChenEdge, ChenNodeType, FlowLayoutDirection } from "./types";
+import { MarkerType } from "@xyflow/react";
+
+export interface ParsedFlowResult {
+  nodes: ChenNode[];
+  edges: ChenEdge[];
+  hasFlowDefinitions: boolean;
+}
+
+export const DEFAULT_FLOW_EXAMPLE = ``;
+
+let measurementCanvas: HTMLCanvasElement | null = null;
+let measurementCtx: CanvasRenderingContext2D | null = null;
+
+export function measureExactTextWidth(
+  text: string,
+  font = "500 12px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+): number {
+  const lines = (text || "").split(/\r?\n/);
+  let maxW = 0;
+
+  if (typeof document !== "undefined") {
+    try {
+      if (!measurementCanvas) {
+        measurementCanvas = document.createElement("canvas");
+        measurementCtx = measurementCanvas.getContext("2d");
+      }
+      if (measurementCtx) {
+        measurementCtx.font = font;
+        for (const line of lines) {
+          const w = measurementCtx.measureText(line.trim()).width;
+          if (w > maxW) maxW = w;
+        }
+        if (maxW > 0) return maxW;
+      }
+    } catch {
+      // Fallback to heuristic below
+    }
+  }
+
+  for (const line of lines) {
+    let width = 0;
+    for (const ch of line.trim()) {
+      if (/[il.,' !:;|\\]/.test(ch)) width += 3.2;
+      else if (/[frtj -]/.test(ch)) width += 4.5;
+      else if (/[mwMW_@#%&]/.test(ch)) width += 9.5;
+      else if (/[A-Z]/.test(ch)) width += 7.5;
+      else width += 6.2;
+    }
+    if (width > maxW) maxW = width;
+  }
+  return maxW;
+}
+
+/**
+ * Computes node width and height:
+ * - WIDTH tightly fits text with no extra side spaces
+ * - HEIGHT maintains comfortable standard flowchart height (does not shrink height)
+ */
+export function computeNodeDimensions(
+  type: ChenNodeType | string,
+  label: string
+): { width: number; height: number } {
+  const lines = (label || "").split(/\r?\n/);
+  const lineCount = Math.max(1, lines.length);
+
+  // Additional height if there are multiple lines of text
+  const extraHeight = Math.max(0, (lineCount - 1) * 18);
+  // Exact pixel width of text
+  const textWidth = Math.ceil(measureExactTextWidth(label));
+
+  if (type === "terminator") {
+    // Pill / stadium shape: standard 48px height, curved ends (rx = 24px)
+    const width = Math.max(50, textWidth + 34);
+    const height = 48 + extraHeight;
+    return { width, height };
+  }
+
+  if (type === "decision" || type === "relationship" || type === "identifyingRelationship") {
+    // Diamond shape: standard 54px height, angled corners
+    const width = Math.max(56, Math.round(textWidth * 1.25 + 24));
+    const height = 54 + extraHeight;
+    return { width, height };
+  }
+
+  if (type === "database" || type === "storedData" || type === "internalStorage") {
+    // Cylinder shape: standard 52px height
+    const width = Math.max(40, textWidth + 16);
+    const height = 52 + extraHeight;
+    return { width, height };
+  }
+
+  if (type === "data" || type === "manualInput") {
+    // Parallelogram shape: standard 48px height
+    const width = Math.max(40, textWidth + 18);
+    const height = 48 + extraHeight;
+    return { width, height };
+  }
+
+  if (type === "subroutine" || type === "preparation") {
+    // Standard 48px height
+    const width = Math.max(40, textWidth + 18);
+    const height = 48 + extraHeight;
+    return { width, height };
+  }
+
+  if (type === "document" || type === "multidocument") {
+    // Standard 50px height
+    const width = Math.max(40, textWidth + 16);
+    const height = 50 + extraHeight;
+    return { width, height };
+  }
+
+  if (type === "attribute" || type === "keyAttribute" || type === "multivaluedAttribute") {
+    // Oval attribute: standard 40px height
+    const width = Math.max(30, textWidth + 12);
+    const height = 40 + extraHeight;
+    return { width, height };
+  }
+
+  // Default process, entity, weakEntity, and generic rectangle shapes:
+  // Standard 48px height, width tightly hugging the text (only 8px padding total)
+  const width = Math.max(30, textWidth + 8);
+  const height = 48 + extraHeight;
+  return { width, height };
+}
+
+interface RawNode {
+  id: string;
+  label: string;
+  type: ChenNodeType;
+}
+
+interface RawEdge {
+  sourceId: string;
+  targetId: string;
+  label?: string;
+}
+
+/**
+ * Parses a raw token like "[Process]", "<Decision>", "[(Database)]", "(Start)" into label and shape type
+ */
+function parseNodeToken(rawToken: string): { label: string; type: ChenNodeType } {
+  const token = rawToken.trim();
+
+  // [(Database)] -> cylinder database
+  if (token.startsWith("[(") && token.endsWith(")]")) {
+    return { label: token.slice(2, -2).trim(), type: "database" };
+  }
+  // [[Subroutine]] -> subroutine
+  if (token.startsWith("[[") && token.endsWith("]]")) {
+    return { label: token.slice(2, -2).trim(), type: "subroutine" };
+  }
+  // [/Data/] or [\Data\] -> data/io
+  if ((token.startsWith("[/") && token.endsWith("/]")) || (token.startsWith("[\x5C") && token.endsWith("\x5C]"))) {
+    return { label: token.slice(2, -2).trim(), type: "data" };
+  }
+  // ([Terminator]) or (Terminator) -> terminator (pill)
+  if (token.startsWith("([") && token.endsWith("])")) {
+    return { label: token.slice(2, -2).trim(), type: "terminator" };
+  }
+  if (token.startsWith("(") && token.endsWith(")")) {
+    return { label: token.slice(1, -1).trim(), type: "terminator" };
+  }
+  // <Decision> or {Decision} -> decision (diamond)
+  if (token.startsWith("<") && token.endsWith(">")) {
+    return { label: token.slice(1, -1).trim(), type: "decision" };
+  }
+  if (token.startsWith("{") && token.endsWith("}")) {
+    return { label: token.slice(1, -1).trim(), type: "decision" };
+  }
+  // [Process] -> process (rectangle)
+  if (token.startsWith("[") && token.endsWith("]")) {
+    return { label: token.slice(1, -1).trim(), type: "process" };
+  }
+
+  // Plain word heuristics (e.g. Start, End, Is Valid?)
+  const lower = token.toLowerCase();
+  if (lower === "start" || lower === "end" || lower === "stop") {
+    return { label: token, type: "terminator" };
+  }
+  if (token.endsWith("?")) {
+    return { label: token, type: "decision" };
+  }
+
+  return { label: token, type: "process" };
+}
+
+/**
+ * Normalizes label to a stable unique node ID
+ */
+function normalizeId(label: string): string {
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `node-${slug || "shape"}`;
+}
+
+/**
+ * Auto-formats and positions nodes and edges either vertically (Top to Bottom) or horizontally (Left to Right)
+ */
+export function layoutNodesAndEdges(
+  nodes: ChenNode[],
+  edges: ChenEdge[],
+  direction: FlowLayoutDirection = "TB"
+): { nodes: ChenNode[]; edges: ChenEdge[] } {
+  if (nodes.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  const nodeMap = new Map<string, ChenNode>();
+  const adj = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+
+  for (const node of nodes) {
+    nodeMap.set(node.id, node);
+    adj.set(node.id, []);
+    inDegree.set(node.id, 0);
+  }
+
+  for (const edge of edges) {
+    if (adj.has(edge.source) && adj.has(edge.target)) {
+      adj.get(edge.source)!.push(edge.target);
+      inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+    }
+  }
+
+  // Find root nodes (inDegree === 0)
+  const roots: string[] = [];
+  for (const [id, deg] of inDegree.entries()) {
+    if (deg === 0) roots.push(id);
+  }
+  if (roots.length === 0 && nodes.length > 0) {
+    roots.push(nodes[0].id);
+  }
+
+  // Layer ranking using BFS
+  const nodeLayer = new Map<string, number>();
+  const queue: { id: string; layer: number; path: Set<string> }[] = roots.map((r) => ({
+    id: r,
+    layer: 0,
+    path: new Set([r]),
+  }));
+
+  while (queue.length > 0) {
+    const { id, layer, path } = queue.shift()!;
+    const currentMax = nodeLayer.get(id) ?? -1;
+    if (layer > currentMax) {
+      nodeLayer.set(id, layer);
+    }
+
+    const neighbors = adj.get(id) || [];
+    for (const neighbor of neighbors) {
+      if (!path.has(neighbor)) {
+        const newPath = new Set(path);
+        newPath.add(neighbor);
+        queue.push({ id: neighbor, layer: layer + 1, path: newPath });
+      }
+    }
+  }
+
+  // Assign any unranked isolated nodes to layer 0
+  for (const node of nodes) {
+    if (!nodeLayer.has(node.id)) {
+      nodeLayer.set(node.id, 0);
+    }
+  }
+
+  // Group nodes by layer
+  const layers = new Map<number, string[]>();
+  for (const [id, layer] of nodeLayer.entries()) {
+    if (!layers.has(layer)) layers.set(layer, []);
+    layers.get(layer)!.push(id);
+  }
+
+  const sortedLayerKeys = Array.from(layers.keys()).sort((a, b) => a - b);
+  const nodePositionMap = new Map<string, { x: number; y: number }>();
+  const updatedNodes: ChenNode[] = [];
+
+  if (direction === "TB") {
+    // Vertical layout (Top to Bottom): each layer is a horizontal row
+    let currentY = 80;
+    sortedLayerKeys.forEach((layerKey) => {
+      const nodeIdsInLayer = layers.get(layerKey) || [];
+      const layerNodes = nodeIdsInLayer
+        .map((id) => nodeMap.get(id))
+        .filter((n): n is ChenNode => !!n);
+
+      const nodeDims = layerNodes.map((n) => {
+        const d = computeNodeDimensions(n.type, (n.data?.label as string) || "");
+        const width = n.width || d.width;
+        const height = n.height || d.height;
+        return { width, height };
+      });
+
+      const maxHeight = Math.max(...nodeDims.map((d) => d.height), 48);
+      const gapX = 48;
+      const totalLayerWidth =
+        nodeDims.reduce((acc, d) => acc + d.width, 0) +
+        Math.max(0, layerNodes.length - 1) * gapX;
+
+      let currentX = 420 - totalLayerWidth / 2;
+
+      layerNodes.forEach((node, colIdx) => {
+        const { width, height } = nodeDims[colIdx];
+        const position = { x: Math.round(currentX), y: Math.round(currentY) };
+        nodePositionMap.set(node.id, position);
+        currentX += width + gapX;
+
+        updatedNodes.push({
+          ...node,
+          position,
+          width,
+          height,
+          style: { ...(node.style || {}), width, height },
+        });
+      });
+
+      currentY += maxHeight + 85;
+    });
+  } else {
+    // Horizontal layout (Left to Right): each layer is a vertical column
+    let currentX = 80;
+    sortedLayerKeys.forEach((layerKey) => {
+      const nodeIdsInLayer = layers.get(layerKey) || [];
+      const layerNodes = nodeIdsInLayer
+        .map((id) => nodeMap.get(id))
+        .filter((n): n is ChenNode => !!n);
+
+      const nodeDims = layerNodes.map((n) => {
+        const d = computeNodeDimensions(n.type, (n.data?.label as string) || "");
+        const width = n.width || d.width;
+        const height = n.height || d.height;
+        return { width, height };
+      });
+
+      const maxWidth = Math.max(...nodeDims.map((d) => d.width), 120);
+      const gapY = 36;
+      const totalLayerHeight =
+        nodeDims.reduce((acc, d) => acc + d.height, 0) +
+        Math.max(0, layerNodes.length - 1) * gapY;
+
+      let currentY = 280 - totalLayerHeight / 2;
+
+      layerNodes.forEach((node, rowIdx) => {
+        const { width, height } = nodeDims[rowIdx];
+        const position = { x: Math.round(currentX), y: Math.round(currentY) };
+        nodePositionMap.set(node.id, position);
+        currentY += height + gapY;
+
+        updatedNodes.push({
+          ...node,
+          position,
+          width,
+          height,
+          style: { ...(node.style || {}), width, height },
+        });
+      });
+
+      currentX += maxWidth + 95;
+    });
+  }
+
+  // Ensure any isolated nodes not processed retain safe coordinates
+  for (const n of nodes) {
+    if (!nodePositionMap.has(n.id)) {
+      nodePositionMap.set(n.id, n.position);
+      updatedNodes.push(n);
+    }
+  }
+
+  // Update edges with optimal handles based on layout direction
+  const updatedEdges: ChenEdge[] = edges.map((edge) => {
+    const sourcePos = nodePositionMap.get(edge.source);
+    const targetPos = nodePositionMap.get(edge.target);
+
+    let sourceHandle = "bottom-source";
+    let targetHandle = "top-target";
+
+    if (sourcePos && targetPos) {
+      if (direction === "TB") {
+        if (sourcePos.y < targetPos.y - 25) {
+          sourceHandle = "bottom-source";
+          targetHandle = "top-target";
+        } else if (sourcePos.y > targetPos.y + 25) {
+          if (sourcePos.x <= targetPos.x) {
+            sourceHandle = "left-source";
+            targetHandle = "left-target";
+          } else {
+            sourceHandle = "right-source";
+            targetHandle = "right-target";
+          }
+        } else {
+          if (sourcePos.x < targetPos.x) {
+            sourceHandle = "right-source";
+            targetHandle = "left-target";
+          } else {
+            sourceHandle = "left-source";
+            targetHandle = "right-target";
+          }
+        }
+      } else {
+        // Horizontal (LR)
+        if (sourcePos.x < targetPos.x - 25) {
+          sourceHandle = "right-source";
+          targetHandle = "left-target";
+        } else if (sourcePos.x > targetPos.x + 25) {
+          if (sourcePos.y <= targetPos.y) {
+            sourceHandle = "top-source";
+            targetHandle = "top-target";
+          } else {
+            sourceHandle = "bottom-source";
+            targetHandle = "bottom-target";
+          }
+        } else {
+          if (sourcePos.y < targetPos.y) {
+            sourceHandle = "bottom-source";
+            targetHandle = "top-target";
+          } else {
+            sourceHandle = "top-source";
+            targetHandle = "bottom-target";
+          }
+        }
+      }
+    }
+
+    return {
+      ...edge,
+      sourceHandle,
+      targetHandle,
+    };
+  });
+
+  return { nodes: updatedNodes, edges: updatedEdges };
+}
+
+/**
+ * Parses markdown/text content into nodes and edges for React Flow
+ */
+export function parseFlowFromMarkdown(
+  content: string,
+  existingPositions?: Map<string, { x: number; y: number }>,
+  defaultDirection: FlowLayoutDirection = "TB"
+): ParsedFlowResult {
+  if (!content || !content.trim()) {
+    return { nodes: [], edges: [], hasFlowDefinitions: false };
+  }
+
+  const lines = content.split("\n");
+  const rawNodesMap = new Map<string, RawNode>();
+  const rawEdges: RawEdge[] = [];
+  let foundAnyFlowSyntax = false;
+  let detectedDirection: FlowLayoutDirection = defaultDirection;
+
+  // Regex for arrows with optional label
+  // Matches: -- label --> | -- label -> | - label -> | --> |label| | -> |label| | --> | -> | ==> | --- | --
+  const ARROW_PATTERN =
+    /\s*(?:--\s*([^->\n|]+?)\s*-->|--\s*([^->\n|]+?)\s*->|-\s*([^->\n|]+?)\s*->|-->\s*\|([^|\n]+)\||->\s*\|([^|\n]+)\||-->|->|==>|---|--)\s*/;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//") || trimmed.startsWith("/*")) {
+      continue;
+    }
+
+    const lower = trimmed.toLowerCase();
+    if (
+      lower.startsWith("flowchart lr") ||
+      lower.startsWith("graph lr") ||
+      lower === "direction lr"
+    ) {
+      detectedDirection = "LR";
+      foundAnyFlowSyntax = true;
+      continue;
+    }
+    if (
+      lower.startsWith("flowchart td") ||
+      lower.startsWith("flowchart tb") ||
+      lower.startsWith("graph td") ||
+      lower.startsWith("graph tb") ||
+      lower === "direction td" ||
+      lower === "direction tb"
+    ) {
+      detectedDirection = "TB";
+      foundAnyFlowSyntax = true;
+      continue;
+    }
+
+    // Check if line contains an arrow connection
+    if (ARROW_PATTERN.test(trimmed)) {
+      foundAnyFlowSyntax = true;
+
+      // Extract parts and separator matches
+      let remaining = trimmed;
+      const chainNodes: string[] = [];
+      const chainEdgeLabels: (string | undefined)[] = [];
+
+      while (true) {
+        const match = ARROW_PATTERN.exec(remaining);
+        if (!match) {
+          if (remaining.trim()) {
+            chainNodes.push(remaining.trim());
+          }
+          break;
+        }
+
+        const before = remaining.slice(0, match.index).trim();
+        if (before) {
+          chainNodes.push(before);
+        }
+
+        // Label could be in capture group 1, 2, 3, 4, or 5
+        const label = match[1] || match[2] || match[3] || match[4] || match[5];
+        chainEdgeLabels.push(label ? label.trim() : undefined);
+
+        remaining = remaining.slice(match.index + match[0].length);
+      }
+
+      // Register nodes and connect along the chain
+      for (let i = 0; i < chainNodes.length; i++) {
+        const token = chainNodes[i];
+        const { label, type } = parseNodeToken(token);
+        const id = normalizeId(label);
+
+        if (!rawNodesMap.has(id)) {
+          rawNodesMap.set(id, { id, label, type });
+        }
+
+        if (i < chainNodes.length - 1) {
+          const nextToken = chainNodes[i + 1];
+          const { label: nextLabel, type: nextType } = parseNodeToken(nextToken);
+          const nextId = normalizeId(nextLabel);
+
+          if (!rawNodesMap.has(nextId)) {
+            rawNodesMap.set(nextId, { id: nextId, label: nextLabel, type: nextType });
+          }
+
+          rawEdges.push({
+            sourceId: id,
+            targetId: nextId,
+            label: chainEdgeLabels[i],
+          });
+        }
+      }
+    } else {
+      // Check for standalone node like [My Process] or (Start)
+      const standaloneMatch = trimmed.match(/^([\[({<].+?[\])}>])\s*$/);
+      if (standaloneMatch) {
+        foundAnyFlowSyntax = true;
+        const { label, type } = parseNodeToken(standaloneMatch[1]);
+        const id = normalizeId(label);
+        if (!rawNodesMap.has(id)) {
+          rawNodesMap.set(id, { id, label, type });
+        }
+      }
+    }
+  }
+
+  if (rawNodesMap.size === 0) {
+    return { nodes: [], edges: [], hasFlowDefinitions: foundAnyFlowSyntax };
+  }
+
+  const initialNodes: ChenNode[] = Array.from(rawNodesMap.values()).map((raw) => {
+    const { width, height } = computeNodeDimensions(raw.type, raw.label);
+    return {
+      id: raw.id,
+      type: raw.type,
+      position: { x: 0, y: 0 },
+      width,
+      height,
+      style: { width, height },
+      data: { label: raw.label },
+    };
+  });
+
+  const initialEdges: ChenEdge[] = rawEdges.map((re, index) => ({
+    id: `e-${re.sourceId}-${re.targetId}-${index}`,
+    source: re.sourceId,
+    target: re.targetId,
+    type: "chen",
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: "var(--muted-foreground)",
+      width: 15,
+      height: 15,
+    },
+    data: {
+      label: re.label || "",
+    },
+  }));
+
+  const layouted = layoutNodesAndEdges(initialNodes, initialEdges, detectedDirection);
+
+  // If user has saved/dragged positions, respect them
+  if (existingPositions && existingPositions.size > 0) {
+    const finalNodes = layouted.nodes.map((n) => {
+      if (existingPositions.has(n.id)) {
+        return { ...n, position: existingPositions.get(n.id)! };
+      }
+      return n;
+    });
+
+    const posMap = new Map<string, { x: number; y: number }>();
+    finalNodes.forEach((n) => posMap.set(n.id, n.position));
+
+    const finalEdges = layouted.edges.map((e) => {
+      const sp = posMap.get(e.source);
+      const tp = posMap.get(e.target);
+      if (!sp || !tp) return e;
+
+      let sourceHandle = e.sourceHandle;
+      let targetHandle = e.targetHandle;
+      if (detectedDirection === "TB") {
+        if (sp.y < tp.y - 25) {
+          sourceHandle = "bottom-source";
+          targetHandle = "top-target";
+        } else if (sp.y > tp.y + 25) {
+          sourceHandle = sp.x <= tp.x ? "left-source" : "right-source";
+          targetHandle = sp.x <= tp.x ? "left-target" : "right-target";
+        }
+      } else {
+        if (sp.x < tp.x - 25) {
+          sourceHandle = "right-source";
+          targetHandle = "left-target";
+        } else if (sp.x > tp.x + 25) {
+          sourceHandle = sp.y <= tp.y ? "top-source" : "bottom-source";
+          targetHandle = sp.y <= tp.y ? "top-target" : "bottom-target";
+        }
+      }
+      return { ...e, sourceHandle, targetHandle };
+    });
+
+    return {
+      nodes: finalNodes,
+      edges: finalEdges,
+      hasFlowDefinitions: true,
+    };
+  }
+
+  return {
+    nodes: layouted.nodes,
+    edges: layouted.edges,
+    hasFlowDefinitions: true,
+  };
+}
+

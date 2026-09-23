@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { rehypeHeadingIds } from "@/lib/outline";
 import { markdownComponents } from "./_components/markdown-components";
-import { ChenErdFlow } from "./_components/flow/ChenErdFlow";
+import { ChenErdFlow } from "@/app/_components/flow/ChenErdFlow";
 
 export function Viewer() {
   const { content, fileName, viewerTab } = useContentStore();

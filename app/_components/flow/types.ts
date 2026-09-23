@@ -1,5 +1,7 @@
 import type { Node, Edge } from "@xyflow/react";
 
+export type FlowLayoutDirection = "TB" | "LR";
+
 export type FlowchartNodeType =
   | "terminator"
   | "process"

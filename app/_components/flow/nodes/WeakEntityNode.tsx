@@ -22,14 +22,14 @@ export const WeakEntityNode = memo(function WeakEntityNode({
         <div
           className={cn(
             "group relative w-full h-full min-w-0 min-h-0 p-[1px] rounded-xs border",
-            "bg-card shadow-xs transition-colors duration-100",
+            "bg-white dark:bg-card shadow-xs transition-colors duration-100",
             selected
               ? "border-primary ring-2 ring-primary/20 shadow-sm"
               : "border-border hover:border-foreground/30 hover:shadow-sm"
           )}
         >
           <ChenNodeHandles isConnectable={isConnectable} nodeId={id} />
-          <div className="w-full h-full min-w-0 max-w-full p-0 rounded-xs border border-border bg-card text-card-foreground font-semibold text-xs tracking-tight flex items-center justify-center whitespace-nowrap leading-none">
+          <div className="w-full h-full min-w-0 max-w-full p-0 rounded-xs border border-border bg-white dark:bg-card text-card-foreground font-semibold text-xs tracking-tight flex items-center justify-center whitespace-nowrap leading-none">
             <InlineNodeText id={id} label={data.label as string} />
           </div>
         </div>

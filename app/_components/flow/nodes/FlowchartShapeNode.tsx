@@ -8,6 +8,7 @@ import { InlineNodeText } from "../InlineNodeText";
 import { NodeContextMenu } from "../NodeContextMenu";
 import { flowchartShapes } from "../flowchartShapes";
 import { ChenNodeResizer } from "../ChenNodeResizer";
+import { useTheme } from "next-themes";
 import { cn } from "cn";
 
 export const FlowchartShapeNode = memo(function FlowchartShapeNode({
@@ -17,6 +18,8 @@ export const FlowchartShapeNode = memo(function FlowchartShapeNode({
   isConnectable,
   type,
 }: NodeProps<ChenNode>) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const meta = flowchartShapes[type as FlowchartNodeType];
 
   if (!meta) {
@@ -51,6 +54,7 @@ export const FlowchartShapeNode = memo(function FlowchartShapeNode({
               className: "w-full h-full drop-shadow-2xs",
               selected,
               fillColor: "currentColor",
+              isDark,
             })}
           </div>
 
