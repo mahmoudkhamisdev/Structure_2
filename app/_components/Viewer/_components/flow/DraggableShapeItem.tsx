@@ -49,7 +49,7 @@ export function DraggableShapeItem({
             </button>
           }
         />
-        <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
+        <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
           {name}
         </TooltipContent>
       </Tooltip>

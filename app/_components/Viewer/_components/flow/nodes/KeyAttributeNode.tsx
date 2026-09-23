@@ -21,7 +21,7 @@ export const KeyAttributeNode = memo(function KeyAttributeNode({
       <NodeContextMenu id={id} currentType="keyAttribute">
         <div
           className={cn(
-            "group relative w-full h-full min-w-0 min-h-0 px-2 py-0.5 rounded-full",
+            "group relative w-full h-full min-w-0 min-h-0 p-0 rounded-full",
             "border bg-card text-card-foreground shadow-2xs",
             "flex items-center justify-center text-center",
             "text-xs transition-colors duration-100",
@@ -31,7 +31,7 @@ export const KeyAttributeNode = memo(function KeyAttributeNode({
           )}
         >
           <ChenNodeHandles isConnectable={isConnectable} nodeId={id} />
-          <div className="min-w-0 max-w-full truncate px-1">
+          <div className="min-w-0 max-w-full px-0.5 whitespace-nowrap leading-none flex items-center justify-center">
             <InlineNodeText
               id={id}
               label={data.label as string}

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { cn } from "cn";
+import { computeNodeDimensions } from "./flowParser";
 
 interface InlineNodeTextProps {
   id: string;
@@ -33,24 +34,36 @@ export function InlineNodeText({
     }
   }, [isEditing]);
 
-  const handleFinish = () => {
-    setIsEditing(false);
-    const finalValue = value.trim() ? value : (label || "Untitled");
-    setValue(finalValue);
+  const updateNodeDirectly = (newVal: string) => {
     setNodes((nodes) =>
       nodes.map((node) => {
         if (node.id === id) {
+          const dims = computeNodeDimensions(node.type || "process", newVal || " ");
           return {
             ...node,
+            width: dims.width,
+            height: dims.height,
+            style: {
+              ...node.style,
+              width: dims.width,
+              height: dims.height,
+            },
             data: {
               ...node.data,
-              label: finalValue,
+              label: newVal,
             },
           };
         }
         return node;
       })
     );
+  };
+
+  const handleFinish = () => {
+    setIsEditing(false);
+    const finalValue = value.trim() ? value : (label || "Untitled");
+    setValue(finalValue);
+    updateNodeDirectly(finalValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -60,6 +73,7 @@ export function InlineNodeText({
       handleFinish();
     } else if (e.key === "Escape") {
       setValue(label);
+      updateNodeDirectly(label);
       setIsEditing(false);
     }
   };
@@ -75,7 +89,7 @@ export function InlineNodeText({
         <span
           aria-hidden="true"
           className={cn(
-            "invisible whitespace-pre font-inherit text-inherit text-center px-1",
+            "invisible whitespace-pre font-inherit text-inherit text-center px-0",
             underlined && "underline underline-offset-4 decoration-1 decoration-foreground",
             className
           )}
@@ -88,7 +102,11 @@ export function InlineNodeText({
           ref={inputRef}
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            const nextVal = e.target.value;
+            setValue(nextVal);
+            updateNodeDirectly(nextVal);
+          }}
           onBlur={handleFinish}
           onKeyDown={handleKeyDown}
           onKeyDownCapture={(e) => e.stopPropagation()}
@@ -111,7 +129,7 @@ export function InlineNodeText({
       }}
       title="Double-click to edit name"
       className={cn(
-        "cursor-text select-none whitespace-pre inline-block px-1",
+        "cursor-text select-none whitespace-pre inline-block px-0",
         underlined && "underline underline-offset-4 decoration-1 decoration-foreground",
         className
       )}

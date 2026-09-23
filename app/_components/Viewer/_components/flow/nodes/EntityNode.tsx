@@ -21,17 +21,17 @@ export const EntityNode = memo(function EntityNode({
       <NodeContextMenu id={id} currentType="entity">
         <div
           className={cn(
-            "group relative w-full h-full min-w-0 min-h-0 px-2 py-1 rounded-md",
+            "group relative w-full h-full min-w-0 min-h-0 p-0 rounded-xs",
             "border bg-card text-card-foreground shadow-xs",
             "flex items-center justify-center text-center",
-            "font-semibold text-sm tracking-tight transition-colors duration-100",
+            "font-semibold text-xs tracking-tight transition-colors duration-100",
             selected
               ? "border-primary ring-2 ring-primary/20 shadow-sm"
               : "border-border hover:border-foreground/30 hover:shadow-sm"
           )}
         >
           <ChenNodeHandles isConnectable={isConnectable} nodeId={id} />
-          <div className="min-w-0 max-w-full truncate">
+          <div className="min-w-0 max-w-full px-0.5 whitespace-nowrap leading-none flex items-center justify-center">
             <InlineNodeText id={id} label={data.label as string} />
           </div>
         </div>

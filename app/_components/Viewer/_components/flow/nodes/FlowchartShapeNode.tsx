@@ -39,7 +39,7 @@ export const FlowchartShapeNode = memo(function FlowchartShapeNode({
       <NodeContextMenu id={id} currentType={type}>
         <div
           className={cn(
-            "group relative flex w-full h-full min-w-0 min-h-0 items-center justify-center transition-all duration-150 select-none px-2 py-1",
+            "group relative flex w-full h-full min-w-0 min-h-0 items-center justify-center transition-all duration-150 select-none p-0",
             selected && "drop-shadow-md"
           )}
         >
@@ -55,7 +55,7 @@ export const FlowchartShapeNode = memo(function FlowchartShapeNode({
           </div>
 
           {/* Inner Centered Label */}
-          <div className="relative z-10 min-w-0 max-w-full px-2 py-0.5 text-center font-medium text-xs text-foreground tracking-tight pointer-events-auto leading-tight truncate">
+          <div className="relative z-10 min-w-0 max-w-full px-0.5 text-center font-medium text-xs text-foreground tracking-tight pointer-events-auto leading-none whitespace-nowrap flex items-center justify-center">
             <InlineNodeText id={id} label={(data?.label as string) || meta.defaultLabel} />
           </div>
         </div>

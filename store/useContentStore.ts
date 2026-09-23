@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { Project } from "@/app/_components/Sidebar/types";
 import { initialProjects } from "@/app/_components/Sidebar/constants";
+import { DEFAULT_FLOW_EXAMPLE } from "@/app/_components/Viewer/_components/flow/flowParser";
 
 interface ContentState {
   // Projects
@@ -68,7 +69,11 @@ export const useContentStore = create<ContentState>()(
           };
         }),
 
-      setFileName: (fileName) => set({ fileName }),
+      setFileName: (fileName) =>
+        set({
+          fileName,
+          viewerTab: fileName.toLowerCase().endsWith(".flow") ? "flow" : "viewer",
+        }),
 
       setFilePath: (filePath) => set({ filePath }),
 
@@ -78,17 +83,18 @@ export const useContentStore = create<ContentState>()(
         set((state) => {
           const existingContent = state.fileContents[id];
           const isFlow = name.toLowerCase().endsWith(".flow");
+          const isLegacyPlaceholder = existingContent?.includes("Flow diagram document.");
           const newContent =
-            existingContent !== undefined
+            existingContent !== undefined && !isLegacyPlaceholder
               ? existingContent
-              : (defaultContent ?? (isFlow ? `# ${name}\n\nFlow diagram document.` : `# ${name}\n\nWrite your content here...`));
+              : (defaultContent ?? (isFlow ? DEFAULT_FLOW_EXAMPLE : `# ${name}\n\nWrite your content here...`));
 
           return {
             activeNodeId: id,
             fileName: name,
             filePath: path,
             content: newContent,
-            viewerTab: isFlow ? "flow" : state.viewerTab === "flow" ? "viewer" : state.viewerTab,
+            viewerTab: isFlow ? "flow" : "viewer",
             fileContents: {
               ...state.fileContents,
               [id]: newContent,
@@ -107,6 +113,7 @@ export const useContentStore = create<ContentState>()(
               fileName: "",
               filePath: "",
               content: "",
+              viewerTab: "viewer",
               fileContents: updatedContents,
             };
           }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { flushSync } from "react-dom";
 
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 // 1. Define the possible animation types (UPDATED to include all demo types)
@@ -38,6 +39,7 @@ export const ToggleTheme = ({
   animationType = "circle-spread",
   ...props
 }: ToggleThemeProps) => {
+  const { setTheme, resolvedTheme } = useTheme();
   const [isDark, setIsDark] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -55,7 +57,7 @@ export const ToggleTheme = ({
     });
 
     return () => observer.disconnect();
-  }, []);
+  }, [resolvedTheme]);
 
   useEffect(() => {
     if (animationType === "flip-x-in") return;
@@ -80,15 +82,28 @@ export const ToggleTheme = ({
   const toggleTheme = useCallback(async () => {
     if (!buttonRef.current) return;
 
+    const newTheme = !isDark;
+    const themeStr = newTheme ? "dark" : "light";
+
+    const doc = typeof document !== "undefined" ? document : null;
+    if (!doc) return;
+
     // Wait for the DOM update to complete within the View Transition
-    await document.startViewTransition(() => {
-      flushSync(() => {
-        const newTheme = !isDark;
-        setIsDark(newTheme);
-        document.documentElement.classList.toggle("dark");
-        localStorage.setItem("theme", newTheme ? "dark" : "light");
-      });
-    }).ready;
+    if ("startViewTransition" in doc && typeof (doc as any).startViewTransition === "function") {
+      await (doc as any).startViewTransition(() => {
+        flushSync(() => {
+          setIsDark(newTheme);
+          setTheme(themeStr);
+          doc.documentElement.classList.toggle("dark", newTheme);
+          localStorage.setItem("theme", themeStr);
+        });
+      }).ready;
+    } else {
+      setIsDark(newTheme);
+      setTheme(themeStr);
+      doc.documentElement.classList.toggle("dark", newTheme);
+      localStorage.setItem("theme", themeStr);
+    }
 
     // Calculate coordinates and dimensions for spatial animations
     const { top, left, width, height } =

@@ -21,7 +21,7 @@ export const MultivaluedAttrNode = memo(function MultivaluedAttrNode({
       <NodeContextMenu id={id} currentType="multivaluedAttribute">
         <div
           className={cn(
-            "group relative w-full h-full min-w-0 min-h-0 p-[2px] rounded-full",
+            "group relative w-full h-full min-w-0 min-h-0 p-[1px] rounded-full",
             "border bg-card shadow-2xs transition-colors duration-100",
             selected
               ? "border-primary ring-2 ring-primary/20 shadow-xs"
@@ -29,7 +29,7 @@ export const MultivaluedAttrNode = memo(function MultivaluedAttrNode({
           )}
         >
           <ChenNodeHandles isConnectable={isConnectable} nodeId={id} />
-          <div className="w-full h-full min-w-0 max-w-full px-2 py-0.5 rounded-full border border-border/80 bg-muted/20 text-card-foreground flex items-center justify-center text-center text-xs truncate">
+          <div className="w-full h-full min-w-0 max-w-full p-0 rounded-full border border-border/80 bg-muted/20 text-card-foreground flex items-center justify-center text-center text-xs whitespace-nowrap leading-none">
             <InlineNodeText id={id} label={data.label as string} />
           </div>
         </div>

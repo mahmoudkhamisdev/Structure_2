@@ -21,7 +21,7 @@ export const RelationshipNode = memo(function RelationshipNode({
       <NodeContextMenu id={id} currentType="relationship">
         <div
           className={cn(
-            "group relative inline-flex items-center justify-center w-full h-full min-w-0 min-h-0 px-2 py-1 transition-colors duration-100",
+            "group relative inline-flex items-center justify-center w-full h-full min-w-0 min-h-0 p-0 transition-colors duration-100",
             selected && "filter drop-shadow-sm"
           )}
         >
@@ -47,7 +47,7 @@ export const RelationshipNode = memo(function RelationshipNode({
             />
           </svg>
 
-          <div className="relative z-10 min-w-0 max-w-full px-2 text-[12px] font-medium tracking-tight text-card-foreground truncate">
+          <div className="relative z-10 min-w-0 max-w-full px-0.5 text-[12px] font-medium tracking-tight text-card-foreground whitespace-nowrap leading-none flex items-center justify-center">
             <InlineNodeText id={id} label={data.label as string} />
           </div>
         </div>

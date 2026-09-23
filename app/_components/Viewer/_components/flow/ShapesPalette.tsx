@@ -91,7 +91,7 @@ export function ShapesPalette({ open, onClose, onAddNode, isDragging = false }: 
       ref={paletteRef}
       aria-label="Flowchart Shapes Palette"
       className={cn(
-        "absolute top-16 left-1/2 -translate-x-1/2 z-30 w-[94%] max-w-xl rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150",
+        "absolute right-14 top-1/2 -translate-y-1/2 z-30 w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150",
         isDragging && "opacity-0! pointer-events-none"
       )}
     >

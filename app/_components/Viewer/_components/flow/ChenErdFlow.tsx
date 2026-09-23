@@ -11,6 +11,7 @@ import {
   addEdge,
   useReactFlow,
   BackgroundVariant,
+  MarkerType,
   type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -23,6 +24,8 @@ import { initialChenNodes, initialChenEdges } from "./initial-elements";
 import { ChenToolbar, type InteractionMode } from "./ChenToolbar";
 import { flowchartShapes } from "./flowchartShapes";
 import type { ChenNode, ChenEdge, ChenNodeType, FlowchartNodeType } from "./types";
+import { useContentStore } from "@/store/useContentStore";
+import { parseFlowFromMarkdown, computeNodeDimensions } from "./flowParser";
 import { cn } from "cn";
 
 const sensors = [
@@ -41,14 +44,87 @@ const plugins = (defaults: any[]) =>
 function ChenErdFlowInner() {
   const { resolvedTheme } = useTheme();
   const reactFlowInstance = useReactFlow();
+  const { content } = useContentStore();
+
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const updateThemeState = () => {
+      const isHtmlDark = document.documentElement.classList.contains("dark");
+      setIsDark(isHtmlDark);
+    };
+
+    updateThemeState();
+
+    const observer = new MutationObserver(updateThemeState);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, [resolvedTheme]);
 
   const [mode, setMode] = useState<InteractionMode>("pointer");
   const [nodes, setNodes, onNodesChange] = useNodesState<ChenNode>(initialChenNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ChenEdge>(initialChenEdges);
+
+  // Dynamically update edge marker colors whenever dark/light mode toggles
+  useEffect(() => {
+    const markerColor = isDark ? "#d4d4d8" : "#71717a";
+    setEdges((prevEdges) =>
+      prevEdges.map((edge) => ({
+        ...edge,
+        markerEnd: {
+          ...(typeof edge.markerEnd === "object" ? edge.markerEnd : {}),
+          type: MarkerType.ArrowClosed,
+          color: markerColor,
+          width: 15,
+          height: 15,
+        },
+      }))
+    );
+  }, [isDark, setEdges]);
   const [activeDragItem, setActiveDragItem] = useState<{ type: ChenNodeType; label?: string } | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const lastPointerPosRef = useRef<{ x: number; y: number } | null>(null);
+  const userPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const isFirstParseRef = useRef(true);
+
+  // Preserve user dragged positions
+  const handleNodesChange = useCallback(
+    (changes: any) => {
+      onNodesChange(changes);
+      for (const change of changes) {
+        if (change.type === "position" && change.position && change.id) {
+          userPositionsRef.current.set(change.id, change.position);
+        }
+      }
+    },
+    [onNodesChange]
+  );
+
+  // Synchronize editor text definitions with Flowchart nodes & edges
+  useEffect(() => {
+    if (!content) return;
+    const parsed = parseFlowFromMarkdown(content, userPositionsRef.current);
+    if (parsed.hasFlowDefinitions) {
+      setNodes(parsed.nodes);
+      setEdges(parsed.edges);
+      if (isFirstParseRef.current) {
+        isFirstParseRef.current = false;
+        setTimeout(() => {
+          reactFlowInstance.fitView({ padding: 0.2, duration: 400 });
+        }, 120);
+      }
+    }
+  }, [content, setNodes, setEdges, reactFlowInstance]);
 
   // Track pointer during drag so shape is 100% centered on mouse cursor
   // Use capture phase so stopPropagation in sensors doesn't prevent tracking
@@ -266,18 +342,9 @@ function ChenErdFlowInner() {
         };
       }
 
-      const defaultDimensions: Record<string, { w: number; h: number }> = {
-        entity: { w: 110, h: 46 },
-        weakEntity: { w: 110, h: 46 },
-        relationship: { w: 110, h: 52 },
-        identifyingRelationship: { w: 110, h: 52 },
-        attribute: { w: 96, h: 40 },
-        keyAttribute: { w: 96, h: 40 },
-        multivaluedAttribute: { w: 96, h: 40 },
-        text: { w: 80, h: 32 },
-      };
-      const initialWidth = meta?.width || defaultDimensions[type]?.w || 120;
-      const initialHeight = meta?.height || defaultDimensions[type]?.h || 50;
+      const dims = computeNodeDimensions(type, label);
+      const initialWidth = dims.width;
+      const initialHeight = dims.height;
 
       const newNode: ChenNode = {
         id,
@@ -566,8 +633,6 @@ function ChenErdFlowInner() {
     takeSnapshot();
   }, [takeSnapshot]);
 
-  const isDark = resolvedTheme === "dark";
-
   return (
     <DragDropProvider
       sensors={sensors}
@@ -610,7 +675,7 @@ function ChenErdFlowInner() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDragStart={handleNodeDragStart}
@@ -625,13 +690,13 @@ function ChenErdFlowInner() {
           minZoom={0.2}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
-          className="w-full h-full bg-background"
+          className={cn("w-full h-full bg-background transition-colors duration-200", isDark && "dark")}
         >
           <Background
             variant={BackgroundVariant.Dots}
             gap={18}
             size={1}
-            color={isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.12)"}
+            color={isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.18)"}
           />
           <Controls
             showInteractive={false}

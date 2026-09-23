@@ -11,6 +11,7 @@ import { ArrowUp, ArrowRight, ArrowDown, ArrowLeft } from "lucide-react";
 import { cn } from "cn";
 import type { ChenEdge, ChenNode, FlowchartNodeType } from "./types";
 import { flowchartShapes } from "./flowchartShapes";
+import { computeNodeDimensions } from "./flowParser";
 
 export type ArrowDirection = "top" | "right" | "bottom" | "left";
 
@@ -82,9 +83,10 @@ export function NodeQuickConnectArrow({
     if (!sourceNode) return;
 
     const meta = flowchartShapes[shapeType];
-    const width = meta?.width || 140;
-    const height = meta?.height || 52;
     const label = meta?.defaultLabel || meta?.name || shapeType;
+    const dims = computeNodeDimensions(shapeType, label);
+    const width = dims.width;
+    const height = dims.height;
 
     const sourcePos = sourceNode.position || { x: 0, y: 0 };
     const sourceWidth = (sourceNode.width as number) || 140;
@@ -146,23 +148,23 @@ export function NodeQuickConnectArrow({
   // Direction-specific positioning outside around the node and arrow icon
   const directionConfig = {
     top: {
-      positionClass: "-top-6.5 left-1/2 -translate-x-1/2",
-      icon: <ArrowUp className="size-3 stroke-[2.5]" />,
+      positionClass: "-top-8 left-1/2 -translate-x-1/2",
+      icon: <ArrowUp className="size-4.5 stroke-[2.5]" />,
       side: "top" as const,
     },
     right: {
-      positionClass: "top-1/2 -right-6.5 -translate-y-1/2",
-      icon: <ArrowRight className="size-3 stroke-[2.5]" />,
+      positionClass: "top-1/2 -right-8 -translate-y-1/2",
+      icon: <ArrowRight className="size-4.5 stroke-[2.5]" />,
       side: "right" as const,
     },
     bottom: {
-      positionClass: "-bottom-6.5 left-1/2 -translate-x-1/2",
-      icon: <ArrowDown className="size-3 stroke-[2.5]" />,
+      positionClass: "-bottom-8 left-1/2 -translate-x-1/2",
+      icon: <ArrowDown className="size-4.5 stroke-[2.5]" />,
       side: "bottom" as const,
     },
     left: {
-      positionClass: "top-1/2 -left-6.5 -translate-y-1/2",
-      icon: <ArrowLeft className="size-3 stroke-[2.5]" />,
+      positionClass: "top-1/2 -left-8 -translate-y-1/2",
+      icon: <ArrowLeft className="size-4.5 stroke-[2.5]" />,
       side: "left" as const,
     },
   }[direction];
@@ -183,8 +185,8 @@ export function NodeQuickConnectArrow({
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
           className={cn(
-            "size-5.5 rounded-full bg-primary text-primary-foreground shadow-md hover:scale-120 active:scale-95 transition-transform flex items-center justify-center cursor-pointer border-2 border-background select-none outline-hidden",
-            open && "ring-2 ring-primary/40 scale-110"
+            "size-7 hover:scale-125 active:scale-95 transition-all flex items-center justify-center cursor-pointer select-none outline-hidden text-muted-foreground hover:text-primary",
+            open && "scale-110 text-primary"
           )}
           title={`Create & link shape ${direction}...`}
         >

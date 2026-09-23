@@ -18,6 +18,7 @@ import { FileTreeToolbar } from "./_components/FileTreeToolbar";
 import { FileTree } from "./_components/FileTree";
 import { CreateFileDialog } from "./_components/CreateFileDialog";
 import { useContentStore } from "@/store/useContentStore";
+import { DEFAULT_FLOW_EXAMPLE } from "@/app/_components/Viewer/_components/flow/flowParser";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const {
@@ -97,7 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       const cleanName = name.replace(/\.(md|flow)$/i, "");
       const defaultContent =
         fileType === "flow"
-          ? `# ${cleanName}\n\nFlow diagram document.`
+          ? DEFAULT_FLOW_EXAMPLE
           : `# ${cleanName}\n\nStart typing your content here...`;
 
       if (folderId) {

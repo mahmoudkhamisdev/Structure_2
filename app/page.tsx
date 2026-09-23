@@ -21,7 +21,8 @@ import { useContentStore } from "@/store/useContentStore";
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const isMobile = useIsMobile();
-  const { viewerTab } = useContentStore();
+  const { fileName, viewerTab } = useContentStore();
+  const isFlow = viewerTab === "flow" || fileName?.toLowerCase().endsWith(".flow");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -43,19 +44,19 @@ export default function Home() {
 
         <ResizablePanelGroup
           orientation={isMobile ? "vertical" : "horizontal"}
-          key={`${isMobile ? "vertical" : "horizontal"}-${viewerTab === "flow" ? "no-outlines" : "with-outlines"}`}
+          key={`${isMobile ? "vertical" : "horizontal"}-${isFlow ? "flow-mode" : "md-mode"}`}
         >
-          <ResizablePanel defaultSize={isMobile ? 50 : 25} minSize={isMobile ? 20 : 10}>
+          <ResizablePanel defaultSize={isMobile ? 50 : (isFlow ? 30 : 25)} minSize={isMobile ? 20 : 10}>
             <Editor />
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={isMobile ? 50 : (viewerTab === "flow" ? 60 : 40)} minSize={isMobile ? 20 : 20}>
+          <ResizablePanel defaultSize={isMobile ? 50 : (isFlow ? 70 : 50)} minSize={isMobile ? 20 : 20}>
             <Viewer />
           </ResizablePanel>
-          {!isMobile && viewerTab !== "flow" && (
+          {!isMobile && !isFlow && (
             <>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={20} minSize={10}>
+              <ResizablePanel defaultSize={25} minSize={15}>
                 <Outlines />
               </ResizablePanel>
             </>

@@ -133,10 +133,10 @@ export function ChenToolbar({
     <TooltipProvider delay={150}>
       <aside
         aria-label="Flowchart Shapes Toolbar"
-        className="absolute top-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1.5 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-lg animate-in fade-in zoom-in-95 duration-200"
+        className="absolute top-1/2 -translate-y-1/2 right-3.5 z-20 flex flex-col items-center gap-1 p-1.5 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-lg animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Pointer (Select) and Hand (Pan) Modes */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex flex-col items-center gap-0.5">
           {/* Mouse / Pointer Tool */}
           <Tooltip>
             <TooltipTrigger
@@ -158,7 +158,7 @@ export function ChenToolbar({
                 </button>
               }
             />
-            <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
               Select Tool
             </TooltipContent>
           </Tooltip>
@@ -184,17 +184,17 @@ export function ChenToolbar({
                 </button>
               }
             />
-            <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
               Pan Tool
             </TooltipContent>
           </Tooltip>
         </div>
 
-        {/* Vertical Divider */}
-        <div className="h-4.5 w-px bg-border mx-0.5" />
+        {/* Horizontal Divider */}
+        <div className="w-4.5 h-px bg-border my-0.5" />
 
         {/* Prev / Next History Actions (Undo / Redo) */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex flex-col items-center gap-0.5">
           {/* Prev Action / Undo */}
           <Tooltip>
             <TooltipTrigger
@@ -217,7 +217,7 @@ export function ChenToolbar({
                 </button>
               }
             />
-            <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
               Prev Action (Ctrl+Z)
             </TooltipContent>
           </Tooltip>
@@ -244,17 +244,17 @@ export function ChenToolbar({
                 </button>
               }
             />
-            <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
               Next Action (Ctrl+Y)
             </TooltipContent>
           </Tooltip>
         </div>
 
-        {/* Vertical Divider */}
-        <div className="h-4.5 w-px bg-border mx-0.5" />
+        {/* Horizontal Divider */}
+        <div className="w-4.5 h-px bg-border my-0.5" />
 
         {/* Top 4 Quick Shapes (Draggable & Clickable) */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex flex-col items-center gap-0.5">
           {quickShapes.map((shape) => (
             <DraggableShapeItem
               key={shape.type}
@@ -266,41 +266,37 @@ export function ChenToolbar({
               variant="toolbar"
             />
           ))}
+
+          {/* Minimized Shape Library Toggle Button */}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  data-shapes-trigger="true"
+                  onClick={handleTogglePalette}
+                  className={cn(
+                    "size-7.5 rounded-lg flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-2xs border outline-none",
+                    paletteOpen
+                      ? "bg-primary/10 border-primary/50 text-primary"
+                      : "border-border text-foreground hover:bg-accent/80"
+                  )}
+                >
+                  <Shapes className="size-3.5 text-primary" />
+                </button>
+              }
+            />
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
+              All Shapes Library
+            </TooltipContent>
+          </Tooltip>
         </div>
 
-        {/* Minimized Shape Library Toggle Button */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                data-shapes-trigger="true"
-                onClick={handleTogglePalette}
-                className={cn(
-                  "h-7.5 px-2 text-xs gap-1.5 rounded-lg font-medium flex items-center transition-all active:scale-95 cursor-pointer shadow-2xs border outline-none",
-                  paletteOpen
-                    ? "bg-primary/10 border-primary/50 text-primary"
-                    : "border-border text-foreground hover:bg-accent/80"
-                )}
-              >
-                <Shapes className="size-3.5 text-primary" />
-                <span className="hidden sm:inline">Shapes</span>
-                <ChevronDown
-                  className={cn("size-3 text-muted-foreground transition-transform duration-200", paletteOpen && "rotate-180")}
-                />
-              </button>
-            }
-          />
-          <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
-            Shapes Library
-          </TooltipContent>
-        </Tooltip>
-
-        {/* Vertical Divider */}
-        <div className="h-4.5 w-px bg-border mx-0.5" />
+        {/* Horizontal Divider */}
+        <div className="w-4.5 h-px bg-border my-0.5" />
 
         {/* View & Canvas Actions */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex flex-col items-center gap-0.5">
           {/* Full Screen Toggle */}
           <Tooltip>
             <TooltipTrigger
@@ -319,7 +315,7 @@ export function ChenToolbar({
                 </Button>
               }
             />
-            <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
               {isFullscreen ? "Exit Full Screen" : "Full Screen"}
             </TooltipContent>
           </Tooltip>
@@ -342,11 +338,11 @@ export function ChenToolbar({
                   />
                 }
               />
-              <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2">
+              <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
                 Export Diagram
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent side="bottom" align="end" sideOffset={8} className="w-40 text-xs">
+            <DropdownMenuContent side="left" align="center" sideOffset={8} className="w-40 text-xs">
               <DropdownMenuItem
                 onClick={() => onExport("png")}
                 className="gap-2 cursor-pointer"
@@ -389,7 +385,7 @@ export function ChenToolbar({
                 </Button>
               }
             />
-            <TooltipContent side="bottom" sideOffset={6} className="text-xs font-semibold py-1 px-2 text-destructive">
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2 text-destructive">
               Clear Canvas
             </TooltipContent>
           </Tooltip>

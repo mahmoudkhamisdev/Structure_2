@@ -11,7 +11,7 @@ interface ChenNodeHandlesProps {
 }
 
 const handleCommonClasses =
-  "!w-2 !h-2 !rounded-full !bg-muted-foreground/60 hover:!bg-primary hover:!scale-125 !border !border-background transition-colors duration-100";
+  "!w-2 !h-2 !bg-muted-foreground/60 hover:!bg-primary !z-40";
 
 export function ChenNodeHandles({
   isConnectable = true,
