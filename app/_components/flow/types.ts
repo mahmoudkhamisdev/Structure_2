@@ -50,9 +50,21 @@ export interface ChenNodeData extends Record<string, unknown> {
 
 export type ChenNode = Node<ChenNodeData, ChenNodeType>;
 
+export type FlowEdgeArrowType =
+  | "directed"
+  | "bidirectional"
+  | "line"
+  | "dashed"
+  | "dashedLine"
+  | "thick";
+
+export type FlowEdgeRoutingType = "bezier" | "smoothstep" | "straight";
+
 export interface ChenEdgeData extends Record<string, unknown> {
   label?: string; // e.g. "1", "N", "M", "(0,1)", "(1,N)", "Yes", "No"
   isTotal?: boolean; // Total participation / thick edge
+  arrowType?: FlowEdgeArrowType;
+  routingType?: FlowEdgeRoutingType;
 }
 
 export type ChenEdge = Edge<ChenEdgeData>;

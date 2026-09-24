@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   applyNodeChanges,
   applyEdgeChanges,
+  MarkerType,
   type NodeChange,
   type EdgeChange,
 } from "@xyflow/react";
@@ -9,11 +10,15 @@ import type {
   ChenNode,
   ChenEdge,
   FlowLayoutDirection,
+  FlowEdgeArrowType,
+  FlowEdgeRoutingType,
 } from "../app/_components/flow/types";
 import {
   computeNodeDimensions,
   serializeFlowToMarkdown,
-  parseFlowFromMarkdown
+  parseFlowFromMarkdown,
+  getOptimalHandles,
+  updateEdgesWithOptimalHandles,
 } from "../app/_components/flow/flowParser";
 import { useContentStore } from "@/store/useContentStore";
 import {
@@ -26,6 +31,8 @@ function getStructureFingerprint(
   nodes: ChenNode[],
   edges: ChenEdge[],
   dir: FlowLayoutDirection,
+  defaultArrow?: FlowEdgeArrowType,
+  defaultRouting?: FlowEdgeRoutingType,
 ): string {
   const nodesSig = nodes
     .map(
@@ -34,10 +41,13 @@ function getStructureFingerprint(
     .sort()
     .join("|");
   const edgesSig = edges
-    .map((e) => `${e.source}:${e.target}:${e.data?.label || ""}`)
+    .map(
+      (e) =>
+        `${e.source}:${e.target}:${e.data?.label || ""}:${e.data?.arrowType || ""}:${e.data?.routingType || ""}`
+    )
     .sort()
     .join("|");
-  return `${dir}::${nodesSig}::${edgesSig}`;
+  return `${dir}::${defaultArrow || ""}::${defaultRouting || ""}::${nodesSig}::${edgesSig}`;
 }
 
 interface FlowState {
@@ -61,6 +71,21 @@ interface FlowState {
   // React Flow handlers
   onNodesChange: (changes: NodeChange<ChenNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<ChenEdge>[]) => void;
+
+  defaultArrowType: FlowEdgeArrowType;
+  defaultRoutingType: FlowEdgeRoutingType;
+  setDefaultArrowType: (type: FlowEdgeArrowType) => void;
+  setDefaultRoutingType: (type: FlowEdgeRoutingType) => void;
+  updateEdgeArrowType: (
+    edgeId: string,
+    arrowType: FlowEdgeArrowType,
+    routingType?: FlowEdgeRoutingType
+  ) => void;
+  setAllEdgesArrowType: (
+    arrowType: FlowEdgeArrowType,
+    routingType?: FlowEdgeRoutingType
+  ) => void;
+  deleteEdge: (id: string) => void;
 
   // Specific flow mutation actions that directly sync to the editor
   deleteNode: (id: string) => void;
@@ -89,6 +114,8 @@ export const useFlowStore = create<FlowState>()((set, get) => ({
   edges: initialChenEdges,
   layoutDirection: "TB",
   nodeSpacing: 60,
+  defaultArrowType: "directed",
+  defaultRoutingType: "bezier",
   lastSyncedMarkdown: "",
   lastFingerprint: "",
 
@@ -122,12 +149,23 @@ export const useFlowStore = create<FlowState>()((set, get) => ({
   onNodesChange: (changes) => {
     const prevNodes = get().nodes;
     const nextNodes = applyNodeChanges(changes, prevNodes) as ChenNode[];
-    set({ nodes: nextNodes });
+
+    // When nodes are dragged or resized, dynamically recalculate connected edge handles
+    const hasMovement = changes.some(
+      (c) => (c.type === "position" && c.position) || c.type === "dimensions"
+    );
+
+    let nextEdges = get().edges;
+    if (hasMovement) {
+      nextEdges = updateEdgesWithOptimalHandles(nextNodes, nextEdges);
+    }
+
+    set({ nodes: nextNodes, edges: nextEdges });
 
     // If any node was removed, sync to markdown immediately
     const hasRemoval = changes.some((c) => c.type === "remove");
     if (hasRemoval) {
-      get().syncToMarkdown(nextNodes, get().edges);
+      get().syncToMarkdown(nextNodes, nextEdges);
     }
   },
 
@@ -213,15 +251,128 @@ export const useFlowStore = create<FlowState>()((set, get) => ({
     get().syncToMarkdown(nextNodes, get().edges);
   },
 
+  setDefaultArrowType: (defaultArrowType) => {
+    set({ defaultArrowType });
+    get().syncToMarkdown(get().nodes, get().edges);
+  },
+
+  setDefaultRoutingType: (defaultRoutingType) => {
+    set({ defaultRoutingType });
+    get().syncToMarkdown(get().nodes, get().edges);
+  },
+
+  updateEdgeArrowType: (edgeId, arrowType, routingType) => {
+    const nextEdges = get().edges.map((e) => {
+      if (e.id === edgeId) {
+        return {
+          ...e,
+          data: {
+            ...e.data,
+            arrowType,
+            routingType: routingType ?? (e.data?.routingType as FlowEdgeRoutingType) ?? "bezier",
+            isTotal: arrowType === "thick",
+          },
+        };
+      }
+      return e;
+    });
+
+    set({ edges: nextEdges });
+    get().syncToMarkdown(get().nodes, nextEdges);
+  },
+
+  setAllEdgesArrowType: (arrowType, routingType) => {
+    const nextRouting = routingType ?? get().defaultRoutingType ?? "bezier";
+    const nextEdges = get().edges.map((e) => ({
+      ...e,
+      data: {
+        ...e.data,
+        arrowType,
+        routingType: nextRouting,
+        isTotal: arrowType === "thick",
+      },
+    }));
+
+    set({
+      defaultArrowType: arrowType,
+      defaultRoutingType: nextRouting,
+      edges: nextEdges,
+    });
+    get().syncToMarkdown(get().nodes, nextEdges);
+  },
+
+  deleteEdge: (id: string) => {
+    const nextEdges = get().edges.filter((e) => e.id !== id);
+    set({ edges: nextEdges });
+    get().syncToMarkdown(get().nodes, nextEdges);
+  },
+
   addConnectedNode: (newNode: ChenNode, newEdge: ChenEdge) => {
     const nextNodes = get().nodes.concat(newNode);
-    const nextEdges = get().edges.concat(newEdge);
+    const sourceNode = nextNodes.find((n) => n.id === newEdge.source);
+    const targetNode = nextNodes.find((n) => n.id === newEdge.target);
+    const defaultArrow = get().defaultArrowType;
+    const defaultRouting = get().defaultRoutingType;
+    const arrow = newEdge.data?.arrowType || defaultArrow;
+    let edgeToAdd: ChenEdge = {
+      ...newEdge,
+      type: "chen",
+      data: {
+        ...newEdge.data,
+        arrowType: arrow,
+        routingType: newEdge.data?.routingType || defaultRouting,
+        isTotal: arrow === "thick",
+      },
+      markerEnd: newEdge.markerEnd || {
+        type: MarkerType.ArrowClosed,
+        width: 15,
+        height: 15,
+      },
+    };
+    if (sourceNode && targetNode) {
+      const handles = getOptimalHandles(sourceNode, targetNode);
+      edgeToAdd = {
+        ...edgeToAdd,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
+      };
+    }
+    const nextEdges = get().edges.concat(edgeToAdd);
     set({ nodes: nextNodes, edges: nextEdges });
     get().syncToMarkdown(nextNodes, nextEdges);
   },
 
   addEdgeConnection: (newEdge: ChenEdge) => {
-    const nextEdges = get().edges.concat(newEdge);
+    const nodes = get().nodes;
+    const sourceNode = nodes.find((n) => n.id === newEdge.source);
+    const targetNode = nodes.find((n) => n.id === newEdge.target);
+    const defaultArrow = get().defaultArrowType;
+    const defaultRouting = get().defaultRoutingType;
+    const arrow = newEdge.data?.arrowType || defaultArrow;
+    let edgeToAdd: ChenEdge = {
+      ...newEdge,
+      type: "chen",
+      data: {
+        ...newEdge.data,
+        arrowType: arrow,
+        routingType: newEdge.data?.routingType || defaultRouting,
+        isTotal: arrow === "thick",
+      },
+      markerEnd: newEdge.markerEnd || {
+        type: MarkerType.ArrowClosed,
+        width: 15,
+        height: 15,
+      },
+    };
+    if (sourceNode && targetNode) {
+      const handles = getOptimalHandles(sourceNode, targetNode);
+      edgeToAdd = {
+        ...edgeToAdd,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
+      };
+    }
+    const nextEdges = get().edges.concat(edgeToAdd);
     set({ edges: nextEdges });
     get().syncToMarkdown(get().nodes, nextEdges);
   },
@@ -241,6 +392,8 @@ export const useFlowStore = create<FlowState>()((set, get) => ({
       currentNodes,
       currentEdges,
       currentDir,
+      state.defaultArrowType,
+      state.defaultRoutingType,
     );
     if (fingerprint === state.lastFingerprint) {
       return;
@@ -252,6 +405,8 @@ export const useFlowStore = create<FlowState>()((set, get) => ({
       currentEdges,
       currentDir,
       currentContent,
+      state.defaultArrowType,
+      state.defaultRoutingType,
     );
 
     set({
@@ -293,10 +448,14 @@ export const useFlowStore = create<FlowState>()((set, get) => ({
         nodesWithSelection,
         parsed.edges,
         state.layoutDirection,
+        parsed.defaultArrowType ?? state.defaultArrowType,
+        parsed.defaultRoutingType ?? state.defaultRoutingType,
       );
       set({
         nodes: nodesWithSelection,
         edges: parsed.edges,
+        defaultArrowType: parsed.defaultArrowType ?? state.defaultArrowType,
+        defaultRoutingType: parsed.defaultRoutingType ?? state.defaultRoutingType,
         lastSyncedMarkdown: content,
         lastFingerprint: fingerprint,
       });

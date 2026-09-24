@@ -81,8 +81,12 @@ export function ShapesPalette({
       const target = event.target as HTMLElement | null;
       if (!target) return;
 
-      // Keep open if clicking the toolbar toggle button
-      if (target.closest("[data-shapes-trigger]")) {
+      // Keep open if clicking the toolbar toggle button or radix popover/tooltip
+      if (
+        target.closest("[data-shapes-trigger]") ||
+        target.closest("[data-radix-popper-content-wrapper]") ||
+        target.closest("[role='tooltip']")
+      ) {
         return;
       }
 
@@ -127,8 +131,8 @@ export function ShapesPalette({
       aria-label="Flowchart Shapes Palette"
       className={cn(
         portal
-          ? "fixed right-16 top-1/2 -translate-y-1/2 z-50 w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150"
-          : "absolute right-14 top-1/2 -translate-y-1/2 z-30 w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150",
+          ? "fixed right-16 top-1/2 -translate-y-1/2 z-[10000] w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150 nodrag nopan pointer-events-auto"
+          : "absolute right-14 top-1/2 -translate-y-1/2 z-30 w-[94%] max-w-lg rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150 nodrag nopan pointer-events-auto",
         isDragging && "opacity-0! pointer-events-none",
         className
       )}

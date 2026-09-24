@@ -1,10 +1,19 @@
-import type { ChenNode, ChenEdge, ChenNodeType, FlowLayoutDirection } from "./types";
+import type {
+  ChenNode,
+  ChenEdge,
+  ChenNodeType,
+  FlowLayoutDirection,
+  FlowEdgeArrowType,
+  FlowEdgeRoutingType,
+} from "./types";
 import { MarkerType } from "@xyflow/react";
 
 export interface ParsedFlowResult {
   nodes: ChenNode[];
   edges: ChenEdge[];
   hasFlowDefinitions: boolean;
+  defaultArrowType?: FlowEdgeArrowType;
+  defaultRoutingType?: FlowEdgeRoutingType;
 }
 
 export const DEFAULT_FLOW_EXAMPLE = ``;
@@ -136,6 +145,8 @@ interface RawEdge {
   sourceId: string;
   targetId: string;
   label?: string;
+  arrowType?: FlowEdgeArrowType;
+  routingType?: FlowEdgeRoutingType;
 }
 
 /**
@@ -226,7 +237,131 @@ function normalizeId(label: string): string {
 }
 
 /**
- * Auto-formats and positions nodes and edges either vertically (Top to Bottom) or horizontally (Left to Right)
+ * Calculates optimal source and target handles based on relative geometric orientation.
+ * Rotates connection handles seamlessly as nodes are dragged around each other:
+ * - If target is to the right of source: exit source Right -> enter target Left (arrow points right)
+ * - If target is below source: exit source Bottom -> enter target Top (arrow points down)
+ * - If target is to the left of source: exit source Left -> enter target Right (arrow points left)
+ * - If target is above source: exit source Top -> enter target Bottom (arrow points up)
+ */
+export function getOptimalHandles(
+  sourceNode: {
+    id?: string;
+    position?: { x: number; y: number };
+    width?: number;
+    height?: number;
+    style?: Record<string, any>;
+  },
+  targetNode: {
+    id?: string;
+    position?: { x: number; y: number };
+    width?: number;
+    height?: number;
+    style?: Record<string, any>;
+  }
+): { sourceHandle: string; targetHandle: string } {
+  // Self connection loopback
+  if (sourceNode.id && targetNode.id && sourceNode.id === targetNode.id) {
+    return {
+      sourceHandle: "right-source",
+      targetHandle: "top-target",
+    };
+  }
+
+  const sourcePos = sourceNode.position || { x: 0, y: 0 };
+  const targetPos = targetNode.position || { x: 0, y: 0 };
+
+  const sourceW = Number(sourceNode.width ?? sourceNode.style?.width) || 120;
+  const sourceH = Number(sourceNode.height ?? sourceNode.style?.height) || 48;
+  const targetW = Number(targetNode.width ?? targetNode.style?.width) || 120;
+  const targetH = Number(targetNode.height ?? targetNode.style?.height) || 48;
+
+  // Center coordinates of both nodes
+  const scx = sourcePos.x + sourceW / 2;
+  const scy = sourcePos.y + sourceH / 2;
+  const tcx = targetPos.x + targetW / 2;
+  const tcy = targetPos.y + targetH / 2;
+
+  const dx = tcx - scx;
+  const dy = tcy - scy;
+
+  // Scale dx and dy by half-dimensions to make corner transitions diagonal (aspect-ratio aware)
+  const halfW = Math.max(1, (sourceW + targetW) / 4);
+  const halfH = Math.max(1, (sourceH + targetH) / 4);
+
+  const nx = dx / halfW;
+  const ny = dy / halfH;
+  const angle = Math.atan2(ny, nx);
+
+  // 4 quadrants:
+  // Right (-45° to +45°): Child is to the RIGHT of main node -> exit Right, enter Left
+  // Bottom (+45° to +135°): Child is BELOW main node -> exit Bottom, enter Top
+  // Top (-135° to -45°): Child is ABOVE main node -> exit Top, enter Bottom
+  // Left: Child is to the LEFT of main node -> exit Left, enter Right
+  if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
+    return {
+      sourceHandle: "right-source",
+      targetHandle: "left-target",
+    };
+  } else if (angle >= Math.PI / 4 && angle < (3 * Math.PI) / 4) {
+    return {
+      sourceHandle: "bottom-source",
+      targetHandle: "top-target",
+    };
+  } else if (angle >= (-3 * Math.PI) / 4 && angle < -Math.PI / 4) {
+    return {
+      sourceHandle: "top-source",
+      targetHandle: "bottom-target",
+    };
+  } else {
+    return {
+      sourceHandle: "left-source",
+      targetHandle: "right-target",
+    };
+  }
+}
+
+/**
+ * Updates all edges with dynamic optimal handles matching current node coordinates.
+ * Returns the original edge array reference if no handles changed to prevent re-renders.
+ */
+export function updateEdgesWithOptimalHandles(
+  nodes: ChenNode[],
+  edges: ChenEdge[]
+): ChenEdge[] {
+  if (!nodes || nodes.length === 0 || !edges || edges.length === 0) {
+    return edges;
+  }
+
+  const nodeMap = new Map<string, ChenNode>();
+  for (const n of nodes) {
+    nodeMap.set(n.id, n);
+  }
+
+  let anyChanged = false;
+  const nextEdges = edges.map((edge) => {
+    const sourceNode = nodeMap.get(edge.source);
+    const targetNode = nodeMap.get(edge.target);
+    if (!sourceNode || !targetNode) return edge;
+
+    const { sourceHandle, targetHandle } = getOptimalHandles(sourceNode, targetNode);
+    if (edge.sourceHandle === sourceHandle && edge.targetHandle === targetHandle) {
+      return edge;
+    }
+
+    anyChanged = true;
+    return {
+      ...edge,
+      sourceHandle,
+      targetHandle,
+    };
+  });
+
+  return anyChanged ? nextEdges : edges;
+}
+
+/**
+ * Auto-formats and positions nodes and edges as a clean, readable hierarchical tree (TB or LR)
  */
 export function layoutNodesAndEdges(
   nodes: ChenNode[],
@@ -238,24 +373,83 @@ export function layoutNodesAndEdges(
     return { nodes: [], edges: [] };
   }
 
+  // 1. Map dimensions and build graph adjacency
   const nodeMap = new Map<string, ChenNode>();
-  const adj = new Map<string, string[]>();
-  const inDegree = new Map<string, number>();
+  const nodeDims = new Map<string, { width: number; height: number }>();
+  const childrenMap = new Map<string, string[]>();
+  const parentsMap = new Map<string, string[]>();
 
   for (const node of nodes) {
     nodeMap.set(node.id, node);
-    adj.set(node.id, []);
+    const d = computeNodeDimensions(node.type, (node.data?.label as string) || "");
+    const width = node.width || d.width;
+    const height = node.height || d.height;
+    nodeDims.set(node.id, { width, height });
+    childrenMap.set(node.id, []);
+    parentsMap.set(node.id, []);
+  }
+
+  // Filter valid edges connecting known nodes
+  const validEdges = edges.filter(
+    (e) => nodeMap.has(e.source) && nodeMap.has(e.target) && e.source !== e.target
+  );
+
+  for (const edge of validEdges) {
+    if (!childrenMap.get(edge.source)!.includes(edge.target)) {
+      childrenMap.get(edge.source)!.push(edge.target);
+    }
+    if (!parentsMap.get(edge.target)!.includes(edge.source)) {
+      parentsMap.get(edge.target)!.push(edge.source);
+    }
+  }
+
+  // 2. Break cycles using DFS to identify feedback edges
+  const visited = new Set<string>();
+  const recursionStack = new Set<string>();
+  const feedbackEdges = new Set<string>();
+
+  function detectCycles(nodeId: string) {
+    visited.add(nodeId);
+    recursionStack.add(nodeId);
+
+    const children = childrenMap.get(nodeId) || [];
+    for (const childId of children) {
+      if (recursionStack.has(childId)) {
+        feedbackEdges.add(`${nodeId}->${childId}`);
+      } else if (!visited.has(childId)) {
+        detectCycles(childId);
+      }
+    }
+
+    recursionStack.delete(nodeId);
+  }
+
+  for (const node of nodes) {
+    if (!visited.has(node.id)) {
+      detectCycles(node.id);
+    }
+  }
+
+  // Clean tree graph without feedback edges for hierarchy depth calculation
+  const cleanChildren = new Map<string, string[]>();
+  const cleanParents = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+
+  for (const node of nodes) {
+    cleanChildren.set(node.id, []);
+    cleanParents.set(node.id, []);
     inDegree.set(node.id, 0);
   }
 
-  for (const edge of edges) {
-    if (adj.has(edge.source) && adj.has(edge.target)) {
-      adj.get(edge.source)!.push(edge.target);
+  for (const edge of validEdges) {
+    if (!feedbackEdges.has(`${edge.source}->${edge.target}`)) {
+      cleanChildren.get(edge.source)!.push(edge.target);
+      cleanParents.get(edge.target)!.push(edge.source);
       inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
     }
   }
 
-  // Find root nodes (inDegree === 0)
+  // 3. Find root nodes (inDegree === 0)
   const roots: string[] = [];
   for (const [id, deg] of inDegree.entries()) {
     if (deg === 0) roots.push(id);
@@ -264,202 +458,304 @@ export function layoutNodesAndEdges(
     roots.push(nodes[0].id);
   }
 
-  // Layer ranking using BFS
+  // 4. Assign ranks (layers) using longest-path layering
   const nodeLayer = new Map<string, number>();
-  const queue: { id: string; layer: number; path: Set<string> }[] = roots.map((r) => ({
-    id: r,
-    layer: 0,
-    path: new Set([r]),
-  }));
+  for (const root of roots) {
+    nodeLayer.set(root, 0);
+  }
 
-  while (queue.length > 0) {
-    const { id, layer, path } = queue.shift()!;
-    const currentMax = nodeLayer.get(id) ?? -1;
-    if (layer > currentMax) {
-      nodeLayer.set(id, layer);
-    }
-
-    const neighbors = adj.get(id) || [];
-    for (const neighbor of neighbors) {
-      if (!path.has(neighbor)) {
-        const newPath = new Set(path);
-        newPath.add(neighbor);
-        queue.push({ id: neighbor, layer: layer + 1, path: newPath });
+  let changed = true;
+  let iterations = 0;
+  while (changed && iterations < nodes.length * 2) {
+    changed = false;
+    iterations++;
+    for (const edge of validEdges) {
+      if (!feedbackEdges.has(`${edge.source}->${edge.target}`)) {
+        const srcLayer = nodeLayer.get(edge.source) ?? 0;
+        const tgtLayer = nodeLayer.get(edge.target) ?? 0;
+        if (tgtLayer <= srcLayer) {
+          nodeLayer.set(edge.target, srcLayer + 1);
+          changed = true;
+        }
       }
     }
   }
 
-  // Assign any unranked isolated nodes to layer 0
+  // Fallback for any disconnected nodes
   for (const node of nodes) {
     if (!nodeLayer.has(node.id)) {
       nodeLayer.set(node.id, 0);
     }
   }
 
-  // Group nodes by layer
-  const layers = new Map<number, string[]>();
+  // 5. Group nodes by layer
+  const layerGroups = new Map<number, string[]>();
   for (const [id, layer] of nodeLayer.entries()) {
-    if (!layers.has(layer)) layers.set(layer, []);
-    layers.get(layer)!.push(id);
+    if (!layerGroups.has(layer)) layerGroups.set(layer, []);
+    layerGroups.get(layer)!.push(id);
   }
 
-  const sortedLayerKeys = Array.from(layers.keys()).sort((a, b) => a - b);
-  const nodePositionMap = new Map<string, { x: number; y: number }>();
-  const updatedNodes: ChenNode[] = [];
+  const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
 
-  if (direction === "TB") {
-    // Vertical layout (Top to Bottom): each layer is a horizontal row
-    let currentY = 80;
-    sortedLayerKeys.forEach((layerKey) => {
-      const nodeIdsInLayer = layers.get(layerKey) || [];
-      const layerNodes = nodeIdsInLayer
-        .map((id) => nodeMap.get(id))
-        .filter((n): n is ChenNode => !!n);
+  // 6. Tree-aware ordering within each layer based on parent positions
+  for (let i = 1; i < sortedLayers.length; i++) {
+    const layer = sortedLayers[i];
+    const prevLayer = sortedLayers[i - 1];
+    const prevOrder = new Map(layerGroups.get(prevLayer)!.map((id, idx) => [id, idx]));
 
-      const nodeDims = layerNodes.map((n) => {
-        const d = computeNodeDimensions(n.type, (n.data?.label as string) || "");
-        const width = n.width || d.width;
-        const height = n.height || d.height;
-        return { width, height };
-      });
-
-      const maxHeight = Math.max(...nodeDims.map((d) => d.height), 48);
-      const gapX = Math.max(12, Math.round(nodeSpacing * 0.8));
-      const totalLayerWidth =
-        nodeDims.reduce((acc, d) => acc + d.width, 0) +
-        Math.max(0, layerNodes.length - 1) * gapX;
-
-      let currentX = 420 - totalLayerWidth / 2;
-
-      layerNodes.forEach((node, colIdx) => {
-        const { width, height } = nodeDims[colIdx];
-        const position = { x: Math.round(currentX), y: Math.round(currentY) };
-        nodePositionMap.set(node.id, position);
-        currentX += width + gapX;
-
-        updatedNodes.push({
-          ...node,
-          position,
-          width,
-          height,
-          style: { ...(node.style || {}), width, height },
-        });
-      });
-
-      currentY += maxHeight + Math.max(20, Math.round(nodeSpacing * 1.4));
-    });
-  } else {
-    // Horizontal layout (Left to Right): each layer is a vertical column
-    let currentX = 80;
-    sortedLayerKeys.forEach((layerKey) => {
-      const nodeIdsInLayer = layers.get(layerKey) || [];
-      const layerNodes = nodeIdsInLayer
-        .map((id) => nodeMap.get(id))
-        .filter((n): n is ChenNode => !!n);
-
-      const nodeDims = layerNodes.map((n) => {
-        const d = computeNodeDimensions(n.type, (n.data?.label as string) || "");
-        const width = n.width || d.width;
-        const height = n.height || d.height;
-        return { width, height };
-      });
-
-      const maxWidth = Math.max(...nodeDims.map((d) => d.width), 120);
-      const gapY = Math.max(12, Math.round(nodeSpacing * 0.6));
-      const totalLayerHeight =
-        nodeDims.reduce((acc, d) => acc + d.height, 0) +
-        Math.max(0, layerNodes.length - 1) * gapY;
-
-      let currentY = 280 - totalLayerHeight / 2;
-
-      layerNodes.forEach((node, rowIdx) => {
-        const { width, height } = nodeDims[rowIdx];
-        const position = { x: Math.round(currentX), y: Math.round(currentY) };
-        nodePositionMap.set(node.id, position);
-        currentY += height + gapY;
-
-        updatedNodes.push({
-          ...node,
-          position,
-          width,
-          height,
-          style: { ...(node.style || {}), width, height },
-        });
-      });
-
-      currentX += maxWidth + Math.max(25, Math.round(nodeSpacing * 1.5));
+    layerGroups.get(layer)!.sort((a, b) => {
+      const parentsA = cleanParents.get(a) || [];
+      const parentsB = cleanParents.get(b) || [];
+      const avgA =
+        parentsA.length > 0
+          ? parentsA.reduce((sum, p) => sum + (prevOrder.get(p) ?? 0), 0) / parentsA.length
+          : 999;
+      const avgB =
+        parentsB.length > 0
+          ? parentsB.reduce((sum, p) => sum + (prevOrder.get(p) ?? 0), 0) / parentsB.length
+          : 999;
+      return avgA - avgB;
     });
   }
 
-  // Ensure any isolated nodes not processed retain safe coordinates
-  for (const n of nodes) {
-    if (!nodePositionMap.has(n.id)) {
-      nodePositionMap.set(n.id, n.position);
-      updatedNodes.push(n);
+  // 7. Calculate Coordinates (Tree Layout)
+  const isTB = direction === "TB";
+  const siblingGap = Math.max(16, nodeSpacing);
+  const layerGap = Math.max(24, Math.round(nodeSpacing * 1.2));
+
+  const getPrimaryDim = (id: string) => {
+    const d = nodeDims.get(id)!;
+    return isTB ? d.width : d.height;
+  };
+  const getSecondaryDim = (id: string) => {
+    const d = nodeDims.get(id)!;
+    return isTB ? d.height : d.width;
+  };
+
+  // Bottom-up subtree span calculation
+  const subtreeSpan = new Map<string, number>();
+
+  function computeSubtreeSpan(nodeId: string, visitedNodes: Set<string>): number {
+    if (visitedNodes.has(nodeId)) {
+      return getPrimaryDim(nodeId);
+    }
+    visitedNodes.add(nodeId);
+
+    const children = (cleanChildren.get(nodeId) || []).filter(
+      (c) => (nodeLayer.get(c) ?? 0) > (nodeLayer.get(nodeId) ?? 0)
+    );
+
+    if (children.length === 0) {
+      const span = getPrimaryDim(nodeId);
+      subtreeSpan.set(nodeId, span);
+      return span;
+    }
+
+    let childrenTotal = 0;
+    for (let i = 0; i < children.length; i++) {
+      childrenTotal += computeSubtreeSpan(children[i], visitedNodes);
+      if (i > 0) childrenTotal += siblingGap;
+    }
+
+    const span = Math.max(getPrimaryDim(nodeId), childrenTotal);
+    subtreeSpan.set(nodeId, span);
+    return span;
+  }
+
+  const visitedForSpan = new Set<string>();
+  for (const root of roots) {
+    computeSubtreeSpan(root, visitedForSpan);
+  }
+  for (const node of nodes) {
+    if (!subtreeSpan.has(node.id)) {
+      subtreeSpan.set(node.id, getPrimaryDim(node.id));
     }
   }
 
-  // Update edges with optimal handles based on layout direction
-  const updatedEdges: ChenEdge[] = edges.map((edge) => {
-    const sourcePos = nodePositionMap.get(edge.source);
-    const targetPos = nodePositionMap.get(edge.target);
+  // Top-down position assignment
+  const primaryPos = new Map<string, number>();
+  const visitedForPos = new Set<string>();
 
-    let sourceHandle = "bottom-source";
-    let targetHandle = "top-target";
+  function assignPositions(nodeId: string, startPrimary: number, availableSpan: number) {
+    if (visitedForPos.has(nodeId)) return;
+    visitedForPos.add(nodeId);
 
-    if (sourcePos && targetPos) {
-      if (direction === "TB") {
-        if (sourcePos.y < targetPos.y - 25) {
-          sourceHandle = "bottom-source";
-          targetHandle = "top-target";
-        } else if (sourcePos.y > targetPos.y + 25) {
-          if (sourcePos.x <= targetPos.x) {
-            sourceHandle = "left-source";
-            targetHandle = "left-target";
-          } else {
-            sourceHandle = "right-source";
-            targetHandle = "right-target";
-          }
-        } else {
-          if (sourcePos.x < targetPos.x) {
-            sourceHandle = "right-source";
-            targetHandle = "left-target";
-          } else {
-            sourceHandle = "left-source";
-            targetHandle = "right-target";
-          }
-        }
-      } else {
-        // Horizontal (LR)
-        if (sourcePos.x < targetPos.x - 25) {
-          sourceHandle = "right-source";
-          targetHandle = "left-target";
-        } else if (sourcePos.x > targetPos.x + 25) {
-          if (sourcePos.y <= targetPos.y) {
-            sourceHandle = "top-source";
-            targetHandle = "top-target";
-          } else {
-            sourceHandle = "bottom-source";
-            targetHandle = "bottom-target";
-          }
-        } else {
-          if (sourcePos.y < targetPos.y) {
-            sourceHandle = "bottom-source";
-            targetHandle = "top-target";
-          } else {
-            sourceHandle = "top-source";
-            targetHandle = "bottom-target";
+    const myDim = getPrimaryDim(nodeId);
+    const center = startPrimary + availableSpan / 2;
+    primaryPos.set(nodeId, center - myDim / 2);
+
+    const children = (cleanChildren.get(nodeId) || []).filter(
+      (c) => (nodeLayer.get(c) ?? 0) > (nodeLayer.get(nodeId) ?? 0)
+    );
+
+    if (children.length === 0) return;
+
+    const childSpans = children.map((c) => subtreeSpan.get(c) || getPrimaryDim(c));
+    const totalChildSpan =
+      childSpans.reduce((a, b) => a + b, 0) + (children.length - 1) * siblingGap;
+
+    let childStart = center - totalChildSpan / 2;
+
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      const span = childSpans[i];
+      assignPositions(child, childStart, span);
+      childStart += span + siblingGap;
+    }
+  }
+
+  let currentTreeStart = 80;
+  for (const root of roots) {
+    const rootSpan = subtreeSpan.get(root) || getPrimaryDim(root);
+    assignPositions(root, currentTreeStart, rootSpan);
+    currentTreeStart += rootSpan + siblingGap * 1.5;
+  }
+
+  for (const node of nodes) {
+    if (!primaryPos.has(node.id)) {
+      const span = getPrimaryDim(node.id);
+      primaryPos.set(node.id, currentTreeStart);
+      currentTreeStart += span + siblingGap;
+    }
+  }
+
+  // 8. Overlap elimination pass across each layer
+  for (const layer of sortedLayers) {
+    const layerNodes = layerGroups.get(layer) || [];
+    layerNodes.sort((a, b) => (primaryPos.get(a) ?? 0) - (primaryPos.get(b) ?? 0));
+
+    for (let i = 1; i < layerNodes.length; i++) {
+      const prevId = layerNodes[i - 1];
+      const currId = layerNodes[i];
+      const prevEnd = (primaryPos.get(prevId) ?? 0) + getPrimaryDim(prevId) + siblingGap;
+      const currStart = primaryPos.get(currId) ?? 0;
+
+      if (currStart < prevEnd) {
+        const shift = prevEnd - currStart;
+        primaryPos.set(currId, prevEnd);
+
+        // Propagate shift to descendants to preserve tree shape
+        const descQueue = [...(cleanChildren.get(currId) || [])];
+        const shiftedDesc = new Set<string>();
+        while (descQueue.length > 0) {
+          const desc = descQueue.shift()!;
+          if (!shiftedDesc.has(desc)) {
+            shiftedDesc.add(desc);
+            primaryPos.set(desc, (primaryPos.get(desc) ?? 0) + shift);
+            descQueue.push(...(cleanChildren.get(desc) || []));
           }
         }
       }
     }
+  }
+
+  // 9. Bottom-up parent recentering pass to keep parents centered over their children
+  for (let l = sortedLayers.length - 2; l >= 0; l--) {
+    const layer = sortedLayers[l];
+    const layerNodes = layerGroups.get(layer) || [];
+    for (const parentId of layerNodes) {
+      const children = (cleanChildren.get(parentId) || []).filter(
+        (c) => (nodeLayer.get(c) ?? 0) === (nodeLayer.get(parentId) ?? 0) + 1
+      );
+      if (children.length > 0) {
+        const firstChildPos = primaryPos.get(children[0]) ?? 0;
+        const lastChild = children[children.length - 1];
+        const lastChildPos = primaryPos.get(lastChild) ?? 0;
+        const lastChildDim = getPrimaryDim(lastChild);
+        const childrenCenter = (firstChildPos + (lastChildPos + lastChildDim)) / 2;
+        const myDim = getPrimaryDim(parentId);
+        primaryPos.set(parentId, Math.round(childrenCenter - myDim / 2));
+      }
+    }
+
+    layerNodes.sort((a, b) => (primaryPos.get(a) ?? 0) - (primaryPos.get(b) ?? 0));
+    for (let i = 1; i < layerNodes.length; i++) {
+      const prevId = layerNodes[i - 1];
+      const currId = layerNodes[i];
+      const prevEnd = (primaryPos.get(prevId) ?? 0) + getPrimaryDim(prevId) + siblingGap;
+      if ((primaryPos.get(currId) ?? 0) < prevEnd) {
+        primaryPos.set(currId, prevEnd);
+      }
+    }
+  }
+
+  // 10. Converging node alignment: re-center multi-parent nodes between their parents
+  for (const layer of sortedLayers) {
+    const layerNodes = layerGroups.get(layer) || [];
+    for (let i = 0; i < layerNodes.length; i++) {
+      const id = layerNodes[i];
+      const parents = cleanParents.get(id) || [];
+      if (parents.length > 1) {
+        const parentCenters = parents.map((p) => {
+          const pos = primaryPos.get(p) ?? 0;
+          return pos + getPrimaryDim(p) / 2;
+        });
+        const targetCenter =
+          parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length;
+        const myDim = getPrimaryDim(id);
+        const desiredPos = targetCenter - myDim / 2;
+
+        const prevEnd =
+          i > 0
+            ? (primaryPos.get(layerNodes[i - 1]) ?? 0) + getPrimaryDim(layerNodes[i - 1]) + siblingGap
+            : -Infinity;
+        const nextStart =
+          i < layerNodes.length - 1
+            ? (primaryPos.get(layerNodes[i + 1]) ?? 0) - siblingGap - myDim
+            : Infinity;
+
+        if (desiredPos >= prevEnd && desiredPos <= nextStart) {
+          primaryPos.set(id, Math.round(desiredPos));
+        }
+      }
+    }
+  }
+
+  // 11. Assign secondary coordinates (Y for TB, X for LR) based on layer
+  const secondaryPos = new Map<number, number>();
+  const maxSecondaryInLayer = new Map<number, number>();
+  let currentSecondary = 80;
+
+  for (const layer of sortedLayers) {
+    const layerNodes = layerGroups.get(layer) || [];
+    const maxSecDim = Math.max(
+      ...layerNodes.map((id) => getSecondaryDim(id)),
+      48
+    );
+    maxSecondaryInLayer.set(layer, maxSecDim);
+    secondaryPos.set(layer, currentSecondary);
+    currentSecondary += maxSecDim + layerGap;
+  }
+
+  // 12. Normalize coordinates so minimum X and Y start cleanly at (80, 80)
+  let minPrimary = Infinity;
+  for (const pos of primaryPos.values()) {
+    if (pos < minPrimary) minPrimary = pos;
+  }
+  const primaryOffset = 80 - (isFinite(minPrimary) ? minPrimary : 0);
+
+  const updatedNodes: ChenNode[] = nodes.map((node) => {
+    const layer = nodeLayer.get(node.id) ?? 0;
+    const prim = (primaryPos.get(node.id) ?? 0) + primaryOffset;
+    const rowMax = maxSecondaryInLayer.get(layer) || 48;
+    const dims = nodeDims.get(node.id)!;
+    const mySecDim = isTB ? dims.height : dims.width;
+    const sec = (secondaryPos.get(layer) ?? 80) + Math.round((rowMax - mySecDim) / 2);
+
+    const x = Math.round(isTB ? prim : sec);
+    const y = Math.round(isTB ? sec : prim);
 
     return {
-      ...edge,
-      sourceHandle,
-      targetHandle,
+      ...node,
+      position: { x, y },
+      width: dims.width,
+      height: dims.height,
+      style: { ...(node.style || {}), width: dims.width, height: dims.height },
     };
   });
+
+  // 13. Dynamically compute optimal handles for every edge
+  const updatedEdges = updateEdgesWithOptimalHandles(updatedNodes, edges);
 
   return { nodes: updatedNodes, edges: updatedEdges };
 }
@@ -482,15 +778,64 @@ export function parseFlowFromMarkdown(
   const rawEdges: RawEdge[] = [];
   let foundAnyFlowSyntax = false;
   let detectedDirection: FlowLayoutDirection = defaultDirection;
+  let detectedDefaultArrow: FlowEdgeArrowType = "directed";
+  let detectedRouting: FlowEdgeRoutingType = "bezier";
 
   // Regex for arrows with optional label
-  // Matches: -- label --> | -- label -> | - label -> | --> |label| | -> |label| | --> | -> | ==> | --- | --
+  // Matches: <-- label --> | <--> | -- label --> | --> |label| | --> | -- label -> | -> |label| | -> | == label ==> | ==> | -. label .-> | -.-> | -.- label -.- | -.- | -- label --- | --- | --
   const ARROW_PATTERN =
-    /\s*(?:--\s*([^->\n|]+?)\s*-->|--\s*([^->\n|]+?)\s*->|-\s*([^->\n|]+?)\s*->|-->\s*\|([^|\n]+)\||->\s*\|([^|\n]+)\||-->|->|==>|---|--)\s*/;
+    /\s*(?:<--\s*([^->\n|]+?)\s*-->|<-->|--\s*([^->\n|]+?)\s*-->|-->\s*\|([^|\n]+)\||-->|--\s*([^->\n|]+?)\s*->|->\s*\|([^|\n]+)\||->|==\s*([^=\n|]+?)\s*==>|==>|-\.\s*([^.\n|]+?)\s*\.->|-\.->|-.-|-+\s*([^->\n|]+?)\s*-+|---+|--)\s*/;
+
+  function detectArrowType(matchStr: string): FlowEdgeArrowType {
+    const s = matchStr.trim();
+    if (s.startsWith("<") || s.includes("<-->") || s.includes("<--")) {
+      return "bidirectional";
+    }
+    if (s.includes("==>") || s.startsWith("==")) {
+      return "thick";
+    }
+    if (s.includes("-.->") || (s.includes("-.") && s.includes(".->"))) {
+      return "dashed";
+    }
+    if (s.includes("-.-")) {
+      return "dashedLine";
+    }
+    if (s.includes("---") || (s.startsWith("--") && s.endsWith("---"))) {
+      return "line";
+    }
+    return "directed";
+  }
 
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//") || trimmed.startsWith("/*")) {
+      continue;
+    }
+
+    // Check for comment directives like %% routing: smoothstep or %% arrowType: dashed
+    if (trimmed.startsWith("%%")) {
+      const directiveMatch = trimmed.match(/^%%\s*(routing|arrowType|arrow):\s*([a-zA-Z_-]+)/i);
+      if (directiveMatch) {
+        foundAnyFlowSyntax = true;
+        const key = directiveMatch[1].toLowerCase();
+        const val = directiveMatch[2].toLowerCase();
+        if (key === "routing") {
+          if (val === "bezier" || val === "smoothstep" || val === "straight") {
+            detectedRouting = val;
+          }
+        } else if (key === "arrowtype" || key === "arrow") {
+          if (
+            val === "directed" ||
+            val === "bidirectional" ||
+            val === "line" ||
+            val === "dashed" ||
+            val === "dashedline" ||
+            val === "thick"
+          ) {
+            detectedDefaultArrow = val === "dashedline" ? "dashedLine" : (val as FlowEdgeArrowType);
+          }
+        }
+      }
       continue;
     }
 
@@ -517,14 +862,27 @@ export function parseFlowFromMarkdown(
       continue;
     }
 
+    // Extract inline routing directive from line if present, e.g. %% routing:smoothstep
+    let lineRouting: FlowEdgeRoutingType | undefined = undefined;
+    const inlineRoutingMatch = trimmed.match(/%%\s*routing:\s*([a-zA-Z_-]+)/i);
+    let lineContent = trimmed;
+    if (inlineRoutingMatch) {
+      const r = inlineRoutingMatch[1].toLowerCase();
+      if (r === "bezier" || r === "smoothstep" || r === "straight") {
+        lineRouting = r;
+      }
+      lineContent = trimmed.slice(0, inlineRoutingMatch.index).trim();
+    }
+
     // Check if line contains an arrow connection
-    if (ARROW_PATTERN.test(trimmed)) {
+    if (ARROW_PATTERN.test(lineContent)) {
       foundAnyFlowSyntax = true;
 
       // Extract parts and separator matches
-      let remaining = trimmed;
+      let remaining = lineContent;
       const chainNodes: string[] = [];
       const chainEdgeLabels: (string | undefined)[] = [];
+      const chainEdgeArrowTypes: FlowEdgeArrowType[] = [];
 
       while (true) {
         const match = ARROW_PATTERN.exec(remaining);
@@ -540,9 +898,10 @@ export function parseFlowFromMarkdown(
           chainNodes.push(before);
         }
 
-        // Label could be in capture group 1, 2, 3, 4, or 5
-        const label = match[1] || match[2] || match[3] || match[4] || match[5];
+        // Label could be in any capture group
+        const label = match.slice(1).find((g) => Boolean(g));
         chainEdgeLabels.push(label ? label.trim() : undefined);
+        chainEdgeArrowTypes.push(detectArrowType(match[0]));
 
         remaining = remaining.slice(match.index + match[0].length);
       }
@@ -574,6 +933,8 @@ export function parseFlowFromMarkdown(
             sourceId: id,
             targetId: nextId,
             label: chainEdgeLabels[i],
+            arrowType: chainEdgeArrowTypes[i] || detectedDefaultArrow,
+            routingType: lineRouting || detectedRouting,
           });
         }
       }
@@ -642,6 +1003,8 @@ export function parseFlowFromMarkdown(
     },
     data: {
       label: re.label || "",
+      arrowType: re.arrowType || detectedDefaultArrow,
+      routingType: re.routingType || detectedRouting,
     },
   }));
 
@@ -656,40 +1019,14 @@ export function parseFlowFromMarkdown(
       return n;
     });
 
-    const posMap = new Map<string, { x: number; y: number }>();
-    finalNodes.forEach((n) => posMap.set(n.id, n.position));
-
-    const finalEdges = layouted.edges.map((e) => {
-      const sp = posMap.get(e.source);
-      const tp = posMap.get(e.target);
-      if (!sp || !tp) return e;
-
-      let sourceHandle = e.sourceHandle;
-      let targetHandle = e.targetHandle;
-      if (detectedDirection === "TB") {
-        if (sp.y < tp.y - 25) {
-          sourceHandle = "bottom-source";
-          targetHandle = "top-target";
-        } else if (sp.y > tp.y + 25) {
-          sourceHandle = sp.x <= tp.x ? "left-source" : "right-source";
-          targetHandle = sp.x <= tp.x ? "left-target" : "right-target";
-        }
-      } else {
-        if (sp.x < tp.x - 25) {
-          sourceHandle = "right-source";
-          targetHandle = "left-target";
-        } else if (sp.x > tp.x + 25) {
-          sourceHandle = sp.y <= tp.y ? "top-source" : "bottom-source";
-          targetHandle = sp.y <= tp.y ? "top-target" : "bottom-target";
-        }
-      }
-      return { ...e, sourceHandle, targetHandle };
-    });
+    const finalEdges = updateEdgesWithOptimalHandles(finalNodes, layouted.edges);
 
     return {
       nodes: finalNodes,
       edges: finalEdges,
       hasFlowDefinitions: true,
+      defaultArrowType: detectedDefaultArrow,
+      defaultRoutingType: detectedRouting,
     };
   }
 
@@ -697,6 +1034,8 @@ export function parseFlowFromMarkdown(
     nodes: layouted.nodes,
     edges: layouted.edges,
     hasFlowDefinitions: true,
+    defaultArrowType: detectedDefaultArrow,
+    defaultRoutingType: detectedRouting,
   };
 }
 
@@ -778,7 +1117,9 @@ export function serializeFlowToMarkdown(
   nodes: ChenNode[],
   edges: ChenEdge[],
   direction: FlowLayoutDirection = "TB",
-  existingContent: string = ""
+  existingContent: string = "",
+  defaultArrowType: FlowEdgeArrowType = "directed",
+  defaultRoutingType: FlowEdgeRoutingType = "bezier"
 ): string {
   // Extract leading comment or markdown title lines (# Header, // Comment)
   const headerLines: string[] = [];
@@ -815,8 +1156,14 @@ export function serializeFlowToMarkdown(
     outputLines.push("");
   }
 
-  // 2. Direction header
+  // 2. Direction header and global directives
   outputLines.push(`flowchart ${direction}`);
+  if (defaultArrowType && defaultArrowType !== "directed") {
+    outputLines.push(`%% arrowType: ${defaultArrowType}`);
+  }
+  if (defaultRoutingType && defaultRoutingType !== "bezier") {
+    outputLines.push(`%% routing: ${defaultRoutingType}`);
+  }
 
   // 3. Connect nodes via edges
   const nodeMap = new Map<string, ChenNode>();
@@ -844,12 +1191,32 @@ export function serializeFlowToMarkdown(
       const sourceToken = nodeToToken(sourceNode, sourceHasColor);
       const targetToken = nodeToToken(targetNode, targetHasColor);
       const label = (edge.data?.label as string)?.trim();
+      const arrowType: FlowEdgeArrowType =
+        edge.data?.arrowType || (edge.data?.isTotal ? "thick" : defaultArrowType);
 
-      if (label) {
-        outputLines.push(`    ${sourceToken} -- ${label} --> ${targetToken}`);
+      let arrowToken = "-->";
+      if (arrowType === "bidirectional") {
+        arrowToken = label ? `<-- ${label} -->` : `<-->`;
+      } else if (arrowType === "line") {
+        arrowToken = label ? `-- ${label} ---` : `---`;
+      } else if (arrowType === "dashed") {
+        arrowToken = label ? `-. ${label} .->` : `-.->`;
+      } else if (arrowType === "dashedLine") {
+        arrowToken = label ? `-. ${label} -.-` : `-.-`;
+      } else if (arrowType === "thick") {
+        arrowToken = label ? `== ${label} ==>` : `==>`;
       } else {
-        outputLines.push(`    ${sourceToken} --> ${targetToken}`);
+        arrowToken = label ? `-- ${label} -->` : `-->`;
       }
+
+      // Check if this edge has custom routing that differs from defaultRoutingType
+      const edgeRouting = edge.data?.routingType as FlowEdgeRoutingType | undefined;
+      let routingComment = "";
+      if (edgeRouting && edgeRouting !== defaultRoutingType) {
+        routingComment = ` %% routing:${edgeRouting}`;
+      }
+
+      outputLines.push(`    ${sourceToken} ${arrowToken} ${targetToken}${routingComment}`);
     }
   }
 

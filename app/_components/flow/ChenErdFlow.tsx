@@ -9,6 +9,7 @@ import {
   useReactFlow,
   BackgroundVariant,
   MarkerType,
+  ConnectionLineType,
   type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -18,8 +19,18 @@ import { PointerSensor, PointerActivationConstraints, Feedback } from "@dnd-kit/
 import { chenNodeTypes } from "./nodeTypes";
 import { chenEdgeTypes } from "./edges/ChenEdge";
 import { ChenToolbar, type InteractionMode } from "./ChenToolbar";
+import { EdgeContextMenu } from "./EdgeContextMenu";
+import { AirConnectPopup } from "./AirConnectPopup";
 import { flowchartShapes } from "./flowchartShapes";
-import type { ChenNode, ChenEdge, ChenNodeType, FlowchartNodeType, FlowLayoutDirection } from "./types";
+import type {
+  ChenNode,
+  ChenEdge,
+  ChenNodeType,
+  FlowchartNodeType,
+  FlowLayoutDirection,
+  FlowEdgeArrowType,
+  FlowEdgeRoutingType,
+} from "./types";
 import { useContentStore } from "@/store/useContentStore";
 import { useFlowStore } from "@/store/useFlowStore";
 import {
@@ -60,11 +71,41 @@ function ChenErdFlowInner() {
     deleteSelected,
     updateNodeColor,
     addNode,
+    addConnectedNode,
     addEdgeConnection,
     clearCanvas,
     syncToMarkdown,
     syncFromMarkdown,
+    defaultArrowType,
+    setDefaultArrowType,
+    defaultRoutingType,
+    setDefaultRoutingType,
+    updateEdgeArrowType,
+    setAllEdgesArrowType,
+    deleteEdge,
   } = useFlowStore();
+
+  const [edgeMenu, setEdgeMenu] = useState<{
+    edge: ChenEdge;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const [airPopup, setAirPopup] = useState<{
+    sourceNodeId: string;
+    sourceHandleId?: string | null;
+    sourceHandleType?: string | null;
+    screenPos: { x: number; y: number };
+    flowPos: { x: number; y: number };
+  } | null>(null);
+
+  const connectionStartRef = useRef<{
+    nodeId: string | null;
+    handleId: string | null;
+    handleType: string | null;
+  } | null>(null);
+  const connectionStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const hasConnectedRef = useRef(false);
 
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof document !== "undefined") {
@@ -348,17 +389,206 @@ function ChenErdFlowInner() {
   // Connect handler
   const onConnect = useCallback(
     (connection: Connection) => {
+      hasConnectedRef.current = true;
       takeSnapshot();
+      const markerColor = isDark ? "#d4d4d8" : "#71717a";
       const newEdge: ChenEdge = {
         ...connection,
         id: `e-${connection.source}-${connection.target}-${Date.now()}`,
         type: "chen",
-        data: {},
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: markerColor,
+          width: 15,
+          height: 15,
+        },
+        data: {
+          arrowType: defaultArrowType,
+          routingType: defaultRoutingType,
+          isTotal: defaultArrowType === "thick",
+        },
       };
       addEdgeConnection(newEdge);
     },
-    [addEdgeConnection, takeSnapshot]
+    [addEdgeConnection, defaultArrowType, defaultRoutingType, isDark, takeSnapshot]
   );
+
+  const handleConnectStart = useCallback(
+    (
+      event: MouseEvent | TouchEvent,
+      params: { nodeId: string | null; handleId: string | null; handleType: string | null }
+    ) => {
+      connectionStartRef.current = params;
+      hasConnectedRef.current = false;
+      const clientX =
+        "clientX" in event
+          ? event.clientX
+          : (event as TouchEvent).touches?.[0]?.clientX ??
+            (event as TouchEvent).changedTouches?.[0]?.clientX ??
+            0;
+      const clientY =
+        "clientY" in event
+          ? event.clientY
+          : (event as TouchEvent).touches?.[0]?.clientY ??
+            (event as TouchEvent).changedTouches?.[0]?.clientY ??
+            0;
+      connectionStartPosRef.current = { x: clientX, y: clientY };
+    },
+    []
+  );
+
+  const handleConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState?: any) => {
+      if (hasConnectedRef.current) {
+        hasConnectedRef.current = false;
+        connectionStartRef.current = null;
+        connectionStartPosRef.current = null;
+        return;
+      }
+
+      if (connectionState?.isValid) {
+        connectionStartRef.current = null;
+        connectionStartPosRef.current = null;
+        return;
+      }
+
+      const startInfo = connectionStartRef.current;
+      if (!startInfo?.nodeId) {
+        connectionStartPosRef.current = null;
+        return;
+      }
+
+      const clientX =
+        "clientX" in event
+          ? event.clientX
+          : (event as TouchEvent).changedTouches?.[0]?.clientX;
+      const clientY =
+        "clientY" in event
+          ? event.clientY
+          : (event as TouchEvent).changedTouches?.[0]?.clientY;
+
+      if (clientX == null || clientY == null) {
+        connectionStartRef.current = null;
+        connectionStartPosRef.current = null;
+        return;
+      }
+
+      // Check that the user pulled away from the handle
+      if (connectionStartPosRef.current) {
+        const moveDist = Math.hypot(
+          clientX - connectionStartPosRef.current.x,
+          clientY - connectionStartPosRef.current.y
+        );
+        if (moveDist < 25) {
+          connectionStartRef.current = null;
+          connectionStartPosRef.current = null;
+          return;
+        }
+      }
+
+      const sourceNode =
+        reactFlowInstance.getNode(startInfo.nodeId) ||
+        nodes.find((n) => n.id === startInfo.nodeId);
+      if (!sourceNode) {
+        connectionStartRef.current = null;
+        connectionStartPosRef.current = null;
+        return;
+      }
+
+      const flowPos = reactFlowInstance.screenToFlowPosition({
+        x: clientX,
+        y: clientY,
+      });
+
+      setAirPopup({
+        sourceNodeId: startInfo.nodeId,
+        sourceHandleId: startInfo.handleId,
+        sourceHandleType: startInfo.handleType,
+        screenPos: { x: clientX, y: clientY },
+        flowPos,
+      });
+
+      connectionStartRef.current = null;
+      connectionStartPosRef.current = null;
+    },
+    [reactFlowInstance, nodes]
+  );
+
+  const handleAirSelectShape = useCallback(
+    (shapeType: FlowchartNodeType, shapeLabel?: string) => {
+      if (!airPopup) return;
+      takeSnapshot();
+
+      const meta = flowchartShapes[shapeType];
+      const label = shapeLabel || meta?.defaultLabel || meta?.name || shapeType;
+      const dims = computeNodeDimensions(shapeType, label);
+      const width = dims.width;
+      const height = dims.height;
+
+      const newNodeId = `${shapeType}-${Date.now()}`;
+      const newNode: ChenNode = {
+        id: newNodeId,
+        type: shapeType,
+        position: {
+          x: airPopup.flowPos.x - width / 2,
+          y: airPopup.flowPos.y - height / 2,
+        },
+        width,
+        height,
+        style: { width, height },
+        data: { label },
+      };
+
+      const markerColor = isDark ? "#d4d4d8" : "#71717a";
+      const newEdge: ChenEdge = {
+        id: `e-${airPopup.sourceNodeId}-${newNodeId}-${Date.now()}`,
+        source: airPopup.sourceNodeId,
+        target: newNodeId,
+        sourceHandle: airPopup.sourceHandleId || undefined,
+        type: "chen",
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: markerColor,
+          width: 15,
+          height: 15,
+        },
+        data: {
+          arrowType: defaultArrowType,
+          routingType: defaultRoutingType,
+          isTotal: defaultArrowType === "thick",
+        },
+      };
+
+      addConnectedNode(newNode, newEdge);
+      setAirPopup(null);
+    },
+    [airPopup, addConnectedNode, defaultArrowType, defaultRoutingType, isDark, takeSnapshot]
+  );
+
+  const airSourceNode = useMemo(() => {
+    if (!airPopup) return null;
+    return nodes.find((n) => n.id === airPopup.sourceNodeId) || null;
+  }, [airPopup, nodes]);
+
+  const airSourceScreenPos = useMemo(() => {
+    if (!airPopup || !airSourceNode) return null;
+    const screen = reactFlowInstance.flowToScreenPosition(airSourceNode.position);
+    const zoom = reactFlowInstance.getZoom() || 1;
+    const width =
+      ((airSourceNode.width as number) ||
+        (airSourceNode.measured?.width as number) ||
+        140) * zoom;
+    const height =
+      ((airSourceNode.height as number) ||
+        (airSourceNode.measured?.height as number) ||
+        52) * zoom;
+    return {
+      x: screen.x,
+      y: screen.y,
+      width,
+      height,
+    };
+  }, [airPopup, airSourceNode, reactFlowInstance]);
 
   // Add new node in visible area or dropped coordinates
   const handleAddNode = useCallback(
@@ -638,8 +868,13 @@ function ChenErdFlowInner() {
 
       setNodes(result.nodes);
       setEdges(result.edges);
+      syncToMarkdown(result.nodes, result.edges, layoutDirection);
+
+      setTimeout(() => {
+        reactFlowInstance.fitView({ padding: 0.2, duration: 250 });
+      }, 30);
     },
-    [nodes, edges, layoutDirection, setNodeSpacing, setNodes, setEdges, takeSnapshot]
+    [nodes, edges, layoutDirection, setNodeSpacing, setNodes, setEdges, syncToMarkdown, takeSnapshot, reactFlowInstance]
   );
 
   // Clear canvas
@@ -666,6 +901,73 @@ function ChenErdFlowInner() {
       }
     },
     [nodes, takeSnapshot, updateNodeColor]
+  );
+
+  // Selected edge(s) for toolbar arrow type
+  const selectedEdges = useMemo(() => edges.filter((e) => e.selected), [edges]);
+  const firstSelectedEdge = selectedEdges[0];
+
+  const currentArrowType: FlowEdgeArrowType =
+    (firstSelectedEdge?.data?.arrowType as FlowEdgeArrowType | undefined) ||
+    (firstSelectedEdge?.data?.isTotal ? "thick" : defaultArrowType);
+
+  const currentRoutingType: FlowEdgeRoutingType =
+    (firstSelectedEdge?.data?.routingType as FlowEdgeRoutingType | undefined) ||
+    defaultRoutingType ||
+    "bezier";
+
+  const handleArrowTypeChange = useCallback(
+    (type: FlowEdgeArrowType) => {
+      takeSnapshot();
+      if (firstSelectedEdge) {
+        updateEdgeArrowType(firstSelectedEdge.id, type, currentRoutingType);
+      } else {
+        // No arrow or node selected: change the arrow type for ALL nodes and arrows
+        setDefaultArrowType(type);
+        setAllEdgesArrowType(type, currentRoutingType);
+      }
+    },
+    [firstSelectedEdge, currentRoutingType, setAllEdgesArrowType, setDefaultArrowType, updateEdgeArrowType, takeSnapshot]
+  );
+
+  const handleRoutingTypeChange = useCallback(
+    (routing: FlowEdgeRoutingType) => {
+      takeSnapshot();
+      if (firstSelectedEdge) {
+        updateEdgeArrowType(firstSelectedEdge.id, currentArrowType, routing);
+      } else {
+        // No arrow or node selected: change routing for ALL arrows
+        setDefaultRoutingType(routing);
+        setAllEdgesArrowType(currentArrowType, routing);
+      }
+    },
+    [firstSelectedEdge, currentArrowType, setAllEdgesArrowType, setDefaultRoutingType, updateEdgeArrowType, takeSnapshot]
+  );
+
+  const handleDeleteSelectedEdge = useCallback(() => {
+    if (firstSelectedEdge) {
+      takeSnapshot();
+      deleteEdge(firstSelectedEdge.id);
+    }
+  }, [firstSelectedEdge, deleteEdge, takeSnapshot]);
+
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: any) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setEdges((prevEdges) =>
+        prevEdges.map((e) => ({
+          ...e,
+          selected: e.id === edge.id,
+        }))
+      );
+      setEdgeMenu({
+        edge: edge as ChenEdge,
+        x: event.clientX,
+        y: event.clientY,
+      });
+    },
+    [setEdges]
   );
 
   return (
@@ -710,6 +1012,12 @@ function ChenErdFlowInner() {
           selectedNodeCount={selectedNodes.length}
           selectedNodeColor={selectedNodeColor}
           onNodeColorChange={handleNodeColorChange}
+          selectedEdgeCount={selectedEdges.length}
+          currentArrowType={currentArrowType}
+          currentRoutingType={currentRoutingType}
+          onArrowTypeChange={handleArrowTypeChange}
+          onRoutingTypeChange={handleRoutingTypeChange}
+          onDeleteSelectedEdge={handleDeleteSelectedEdge}
         />
 
         {/* Main React Flow Canvas */}
@@ -719,9 +1027,36 @@ function ChenErdFlowInner() {
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={handleConnectStart}
+          onConnectEnd={handleConnectEnd}
           onNodeDragStart={handleNodeDragStart}
+          onEdgeContextMenu={handleEdgeContextMenu}
           nodeTypes={chenNodeTypes}
           edgeTypes={chenEdgeTypes}
+          defaultEdgeOptions={{
+            type: "chen",
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 15,
+              height: 15,
+              color: isDark ? "#d4d4d8" : "#71717a",
+            },
+          }}
+          connectionLineType={
+            defaultRoutingType === "smoothstep"
+              ? ConnectionLineType.SmoothStep
+              : defaultRoutingType === "straight"
+              ? ConnectionLineType.Straight
+              : ConnectionLineType.Bezier
+          }
+          connectionLineStyle={{
+            stroke: isDark ? "#d4d4d8" : "#71717a",
+            strokeWidth: defaultArrowType === "thick" ? 3.2 : 1.6,
+            strokeDasharray:
+              defaultArrowType === "dashed" || defaultArrowType === "dashedLine"
+                ? "5 4"
+                : undefined,
+          }}
           colorMode={isDark ? "dark" : "light"}
           panOnDrag={mode === "hand" ? true : [1, 2]}
           selectionOnDrag={mode === "pointer"}
@@ -749,6 +1084,28 @@ function ChenErdFlowInner() {
             className="!border !border-border !bg-card/90 !backdrop-blur-md !shadow-md !rounded-xl overflow-hidden !bottom-4 !left-4 dark:[&_button]:!bg-card dark:[&_button]:!border-border dark:[&_button]:!fill-foreground dark:[&_button:hover]:!bg-muted/80"
           />
         </ReactFlow>
+
+        {/* Floating Right-Click Arrow Context Menu */}
+        {edgeMenu && (
+          <EdgeContextMenu
+            edge={edgeMenu.edge}
+            position={{ x: edgeMenu.x, y: edgeMenu.y }}
+            onClose={() => setEdgeMenu(null)}
+          />
+        )}
+
+        {/* Air Connect Popup when pulling arrow into canvas */}
+        {airPopup && (
+          <AirConnectPopup
+            sourceNode={airSourceNode}
+            sourceScreenPos={airSourceScreenPos}
+            screenPos={airPopup.screenPos}
+            arrowType={defaultArrowType}
+            routingType={defaultRoutingType}
+            onSelectShape={handleAirSelectShape}
+            onClose={() => setAirPopup(null)}
+          />
+        )}
 
         {/* Drag Overlay: 100% precisely centered on the mouse cursor */}
         {activeDragItem && mousePos && (

@@ -37,13 +37,27 @@ import {
   ArrowRight,
   Palette,
   SlidersHorizontal,
+  Check,
+  Spline,
+  CornerDownRight,
+  Minus,
 } from "lucide-react";
-import type { ChenNodeType, FlowLayoutDirection } from "./types";
+import type {
+  ChenNodeType,
+  FlowLayoutDirection,
+  FlowEdgeArrowType,
+  FlowEdgeRoutingType,
+} from "./types";
 import { DraggableShapeItem } from "./DraggableShapeItem";
 import { ShapesPalette } from "./ShapesPalette";
 import { flowchartShapes } from "./flowchartShapes";
 import { NodeColorGrid } from "./NodeColorPicker";
 import { getNodeColors } from "./nodeColors";
+import {
+  ARROW_TYPES,
+  ROUTING_TYPES,
+  ArrowPreviewIcon,
+} from "./arrowTypes";
 import { cn } from "cn";
 
 export type InteractionMode = "pointer" | "hand";
@@ -68,6 +82,12 @@ interface ChenToolbarProps {
   selectedNodeCount?: number;
   selectedNodeColor?: string;
   onNodeColorChange?: (color: string) => void;
+  selectedEdgeCount?: number;
+  currentArrowType?: FlowEdgeArrowType;
+  currentRoutingType?: FlowEdgeRoutingType;
+  onArrowTypeChange?: (arrowType: FlowEdgeArrowType) => void;
+  onRoutingTypeChange?: (routingType: FlowEdgeRoutingType) => void;
+  onDeleteSelectedEdge?: () => void;
   nodeSpacing?: number;
   onSpacingChange?: (spacing: number) => void;
 }
@@ -92,6 +112,12 @@ export function ChenToolbar({
   selectedNodeCount = 0,
   selectedNodeColor,
   onNodeColorChange,
+  selectedEdgeCount = 0,
+  currentArrowType = "directed",
+  currentRoutingType = "bezier",
+  onArrowTypeChange,
+  onRoutingTypeChange,
+  onDeleteSelectedEdge,
   nodeSpacing = 60,
   onSpacingChange,
 }: ChenToolbarProps) {
@@ -312,6 +338,135 @@ export function ChenToolbar({
         {/* Horizontal Divider */}
         <div className="w-4.5 h-px bg-border my-0.5" />
 
+        {/* Arrow Type Tool */}
+        <DropdownMenu>
+          <Tooltip>
+            <DropdownMenuTrigger
+              render={
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      className={cn(
+                        "size-7.5 rounded-lg flex items-center justify-center transition-all active:scale-95 cursor-pointer relative outline-none",
+                        selectedEdgeCount > 0
+                          ? "bg-primary/15 text-primary border border-primary/40 shadow-xs"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/80"
+                      )}
+                    >
+                      <ArrowPreviewIcon type={currentArrowType} className="w-5 h-2.5" />
+                    </button>
+                  }
+                />
+              }
+            />
+            <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
+              Arrow Type {selectedEdgeCount > 0 ? "(Selected Arrow)" : "(Default)"}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent
+            side="left"
+            align="center"
+            sideOffset={8}
+            className="w-52 p-1 text-xs shadow-xl rounded-xl"
+          >
+            <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              {selectedEdgeCount > 0 ? "Selected Arrow Type" : "Default Arrow Type"}
+            </div>
+
+            <div className="flex flex-col gap-0.5">
+              {ARROW_TYPES.map((opt) => {
+                const isSelected = currentArrowType === opt.type;
+                return (
+                  <button
+                    key={opt.type}
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArrowTypeChange?.(opt.type);
+                    }}
+                    className={cn(
+                      "flex items-center justify-between w-full rounded-md px-2 py-1.5 text-xs transition-colors cursor-pointer text-left outline-none",
+                      isSelected
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "hover:bg-accent hover:text-accent-foreground text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={cn(
+                          "flex items-center justify-center w-7 h-4 rounded bg-muted/60 text-foreground",
+                          isSelected && "text-primary"
+                        )}
+                      >
+                        <ArrowPreviewIcon type={opt.type} />
+                      </div>
+                      <span>{opt.label}</span>
+                    </div>
+                    {isSelected && <Check className="size-3.5 text-primary shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="my-1 h-px bg-border/60" />
+
+            <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Path Routing
+            </div>
+            <div className="grid grid-cols-3 gap-1 px-1">
+              {ROUTING_TYPES.map((r) => {
+                const isSelected = currentRoutingType === r.type;
+                return (
+                  <button
+                    key={r.type}
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRoutingTypeChange?.(r.type);
+                    }}
+                    title={r.description}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1 rounded-md p-1.5 text-[11px] transition-colors cursor-pointer border",
+                      isSelected
+                        ? "bg-primary/15 border-primary/40 text-primary font-medium"
+                        : "border-transparent hover:bg-accent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {r.type === "bezier" ? (
+                      <Spline className="size-3.5" />
+                    ) : r.type === "smoothstep" ? (
+                      <CornerDownRight className="size-3.5" />
+                    ) : (
+                      <Minus className="size-3.5" />
+                    )}
+                    <span className="text-[10px]">{r.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedEdgeCount > 0 && onDeleteSelectedEdge && (
+              <>
+                <div className="my-1 h-px bg-border/60" />
+                <button
+                  type="button"
+                  onClick={onDeleteSelectedEdge}
+                  className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 cursor-pointer text-left transition-colors outline-none"
+                >
+                  <Trash2 className="size-3.5" />
+                  <span>Delete Selected Arrow</span>
+                </button>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Horizontal Divider */}
+        <div className="w-4.5 h-px bg-border my-0.5" />
+
         {/* Node Color Picker (Shows only when clicking on any node) */}
         {selectedNodeCount > 0 && (
           <>
@@ -503,7 +658,7 @@ export function ChenToolbar({
           </DropdownMenu>
 
           {/* Full Screen Toggle */}
-          <Tooltip>
+          {/* <Tooltip>
             <TooltipTrigger
               render={
                 <Button
@@ -523,7 +678,7 @@ export function ChenToolbar({
             <TooltipContent side="left" sideOffset={8} className="text-xs font-semibold py-1 px-2">
               {isFullscreen ? "Exit Full Screen" : "Full Screen"}
             </TooltipContent>
-          </Tooltip>
+          </Tooltip> */}
 
 
 
@@ -556,6 +711,7 @@ export function ChenToolbar({
       <ShapesPalette
         open={paletteOpen}
         onClose={handleClosePalette}
+        portal={true}
         isDragging={isDragging}
         onAddNode={(type, label) => {
           onAddNode(type, label);
