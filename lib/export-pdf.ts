@@ -77,14 +77,57 @@ export async function exportMarkdownToPdf(
       #pdf-render-wrapper h1, #pdf-render-wrapper h2, #pdf-render-wrapper h3, #pdf-render-wrapper h4 {
         color: #0f172a !important;
       }
-      #pdf-render-wrapper p, #pdf-render-wrapper li, #pdf-render-wrapper span {
+      #pdf-render-wrapper p, #pdf-render-wrapper li {
         color: #334155 !important;
       }
-      #pdf-render-wrapper pre, #pdf-render-wrapper code {
+
+      /* Code block container: clean sleek dark card matching preview */
+      #pdf-render-wrapper .code-block-wrapper {
+        background-color: #18181b !important;
+        border: 1px solid #27272a !important;
+        border-radius: 10px !important;
+        overflow: hidden !important;
+        margin: 16px 0 !important;
+      }
+      #pdf-render-wrapper .code-block-header {
+        background-color: #27272a !important;
+        border-bottom: 1px solid #3f3f46 !important;
+        color: #a1a1aa !important;
+      }
+      #pdf-render-wrapper .code-block-header span {
+        color: #a1a1aa !important;
+      }
+      #pdf-render-wrapper .code-block-content {
+        background-color: #18181b !important;
+        padding: 14px 16px !important;
+      }
+
+      /* Delete white background inside code block */
+      #pdf-render-wrapper .code-block-content pre,
+      #pdf-render-wrapper .code-block-content code {
+        background: transparent !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: #f4f4f5 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      #pdf-render-wrapper .code-block-content pre span,
+      #pdf-render-wrapper .code-block-content code span {
+        color: inherit !important;
+        background: transparent !important;
+      }
+
+      /* Inline code outside pre */
+      #pdf-render-wrapper :not(pre) > code {
         background-color: #f1f5f9 !important;
         color: #0f172a !important;
-        border-color: #e2e8f0 !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 4px !important;
+        padding: 2px 6px !important;
       }
+
       #pdf-render-wrapper table {
         border-color: #cbd5e1 !important;
       }
@@ -101,7 +144,7 @@ export async function exportMarkdownToPdf(
     // Collect DOM block boundaries for clean page breaking
     const safeCutPoints: number[] = [];
     const elements = exportWrapper.querySelectorAll(
-      "h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, table, tr, hr",
+      "h1, h2, h3, h4, h5, h6, p, li, pre, .code-block-wrapper, blockquote, table, tr, hr",
     );
     const wrapperRect = exportWrapper.getBoundingClientRect();
 
