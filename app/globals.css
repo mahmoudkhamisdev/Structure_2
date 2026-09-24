@@ -169,12 +169,20 @@
   }
 }
 
+@page {
+  size: auto;
+  margin: 0mm; /* Removes browser automatic headers (title, date) and footers (URL, page #) */
+}
+
 @media print {
+  html,
   body {
     background: #ffffff !important;
     color: #0f172a !important;
     height: auto !important;
     overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   header,
@@ -193,9 +201,10 @@
     width: 100% !important;
     height: auto !important;
     overflow: visible !important;
-    padding: 0 !important;
+    padding: 16mm 18mm !important;
     margin: 0 !important;
     background: transparent !important;
+    box-sizing: border-box !important;
   }
 }
 

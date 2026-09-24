@@ -188,6 +188,10 @@ export function generateExportHtml({
       }
 
       @media print {
+        @page {
+          size: auto;
+          margin: 0mm;
+        }
         body {
           padding: 0 !important;
           background: #ffffff !important;
@@ -195,7 +199,7 @@ export function generateExportHtml({
         }
         .prose-content {
           max-width: 100% !important;
-          padding: 0 !important;
+          padding: 16mm 18mm !important;
           border: none !important;
           box-shadow: none !important;
           background: #ffffff !important;

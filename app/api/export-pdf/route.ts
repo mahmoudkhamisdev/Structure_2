@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { chromium } from "playwright";
 import { generateExportHtml } from "@/lib/export-template";
 
 interface ExportPdfPayload {
@@ -24,41 +25,15 @@ export async function POST(request: NextRequest) {
     const safeTitle =
       title.replace(/[^\w\s\u0600-\u06FF-]/gi, "").trim() || "document";
 
-    let chromium: any;
-    try {
-      const playwright = await import("playwright");
-      chromium = playwright.chromium;
-    } catch {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Headless browser not supported in this serverless environment. PDF export is handled directly in browser.",
-        },
-        { status: 200 },
-      );
-    }
-
-    try {
-      browser = await chromium.launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--font-render-hinting=none",
-        ],
-      });
-    } catch {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Headless browser binary not available. Handled client-side in browser.",
-        },
-        { status: 200 },
-      );
-    }
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--font-render-hinting=none",
+      ],
+    });
 
     const page = await browser.newPage();
 
@@ -70,11 +45,14 @@ export async function POST(request: NextRequest) {
     });
 
     await page.setContent(fullHtml, { waitUntil: "networkidle" });
+
+    // Wait for fonts to render smoothly
     await page.evaluate(() => document.fonts.ready);
 
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
+      displayHeaderFooter: false,
       margin: {
         top: "15mm",
         right: "15mm",
@@ -94,19 +72,16 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.warn("PDF generation server fallback:", error);
+    console.error("Playwright PDF generation error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Server-side PDF generation unavailable. Handled client-side.",
-      },
-      { status: 200 },
+      { success: false, error: "Failed to generate PDF via Playwright" },
+      { status: 500 },
     );
   } finally {
     if (browser) {
       await browser
         .close()
-        .catch((err: any) => console.error("Error closing browser:", err));
+        .catch((err) => console.error("Error closing browser:", err));
     }
   }
 }
