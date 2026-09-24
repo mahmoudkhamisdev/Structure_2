@@ -98,6 +98,13 @@ export async function exportMarkdownToPdf(
     exportWrapper.appendChild(cloned);
     document.body.appendChild(exportWrapper);
 
+    // Collect DOM block boundaries for clean page breaking
+    const safeCutPoints: number[] = [];
+    const elements = exportWrapper.querySelectorAll(
+      "h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, table, tr, hr",
+    );
+    const wrapperRect = exportWrapper.getBoundingClientRect();
+
     // Wait for layout/fonts
     await new Promise((resolve) => setTimeout(resolve, 80));
 
@@ -110,6 +117,16 @@ export async function exportMarkdownToPdf(
       cacheBust: false,
     });
 
+    const scale = canvas.width / (exportWrapper.offsetWidth || 794);
+    elements.forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      const top = Math.round((rect.top - wrapperRect.top) * scale);
+      if (top > 0) {
+        safeCutPoints.push(top);
+      }
+    });
+    safeCutPoints.sort((a, b) => a - b);
+
     // Cleanup off-screen element immediately after canvas capture
     if (document.body.contains(exportWrapper)) {
       document.body.removeChild(exportWrapper);
@@ -119,6 +136,8 @@ export async function exportMarkdownToPdf(
     if (!canvas || canvas.width === 0 || canvas.height === 0) {
       throw new Error("Rendered canvas is empty");
     }
+
+    const canvasCtx = canvas.getContext("2d");
 
     // A4 dimensions in mm: 210 x 297
     const pdf = new jsPDF({
@@ -143,16 +162,28 @@ export async function exportMarkdownToPdf(
     let renderedHeight = 0;
     let pageIndex = 0;
 
-    // Slice canvas page by page
+    // Slice canvas page by page using smart text-aware boundaries
     while (renderedHeight < canvas.height) {
       if (pageIndex > 0) {
         pdf.addPage();
       }
 
-      const chunkHeight = Math.min(
-        pagePixelHeight,
-        canvas.height - renderedHeight,
-      );
+      const remainingHeight = canvas.height - renderedHeight;
+      let chunkHeight = Math.min(pagePixelHeight, remainingHeight);
+
+      // If content spans to next page, find a clean cut that avoids slicing text
+      if (remainingHeight > pagePixelHeight) {
+        const targetY = renderedHeight + pagePixelHeight;
+        const minY = renderedHeight + Math.floor(pagePixelHeight * 0.7);
+        const cleanCutY = findCleanCutY(
+          canvasCtx,
+          canvas.width,
+          targetY,
+          minY,
+          safeCutPoints,
+        );
+        chunkHeight = Math.max(10, cleanCutY - renderedHeight);
+      }
 
       // Create a canvas slice for this specific page
       const sliceCanvas = document.createElement("canvas");
@@ -284,3 +315,68 @@ function fallbackPrintPdf(
     return { success: true };
   }
 }
+
+/**
+ * Finds a clean break line that does not slice through text.
+ * Prioritizes DOM element boundaries (headings, paragraphs, lists, code blocks),
+ * and falls back to scanning for blank pixel rows (whitespace between lines of text).
+ */
+function findCleanCutY(
+  ctx: CanvasRenderingContext2D | null,
+  width: number,
+  targetY: number,
+  minY: number,
+  safeCutPoints: number[],
+): number {
+  // 1. Try to cut at a DOM element boundary (h1-h6, p, li, pre, etc.)
+  for (let i = safeCutPoints.length - 1; i >= 0; i--) {
+    const pt = safeCutPoints[i];
+    if (pt <= targetY && pt >= minY && targetY - pt <= 350) {
+      return pt;
+    }
+  }
+
+  // 2. Scan pixel rows from targetY upwards to find a blank row between lines of text
+  if (!ctx) return targetY;
+
+  const searchStartY = Math.max(minY, targetY - 250);
+  const searchHeight = targetY - searchStartY;
+  if (searchHeight <= 0) return targetY;
+
+  try {
+    const imgData = ctx.getImageData(0, searchStartY, width, searchHeight);
+    const data = imgData.data;
+
+    // Scan from targetY upwards
+    for (let row = searchHeight - 1; row >= 0; row--) {
+      let hasDarkText = false;
+      const rowOffset = row * width * 4;
+
+      // Sample pixels across this row
+      for (let col = 0; col < width; col += 3) {
+        const idx = rowOffset + col * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const a = data[idx + 3];
+
+        // Dark text glyphs have low RGB values (< 190) and visible alpha
+        if (a > 50 && (r < 190 || g < 190 || b < 190)) {
+          hasDarkText = true;
+          break;
+        }
+      }
+
+      // If no dark text found in this row, this is a clean gap between lines
+      if (!hasDarkText) {
+        return searchStartY + row;
+      }
+    }
+  } catch {
+    // If getImageData fails, fallback safely to targetY
+    return targetY;
+  }
+
+  return targetY;
+}
+
